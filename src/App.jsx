@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import {
   Shield,
   ShieldAlert,
@@ -977,6 +977,27 @@ function MonopolyAdminRoute() {
   );
 }
 
+function AdminPageTitleSync() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname.toLowerCase();
+    if (path === '/' || path === '') {
+      document.title = 'AES Master Admin';
+    } else if (path.startsWith('/monopoly')) {
+      document.title = 'Market Monopoly Admin';
+    } else if (path.startsWith('/defend')) {
+      document.title = 'Defend The Empire Admin';
+    } else if (path.startsWith('/investomania')) {
+      document.title = 'Investomania Admin';
+    } else {
+      document.title = 'AES Master Admin';
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
 export default function App() {
   // Passkey always starts empty so credentials are never pre-filled or visible
   const [passkey, setPasskey] = useState('');
@@ -986,6 +1007,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <AdminPageTitleSync />
       <Routes>
         <Route
           path="/"
