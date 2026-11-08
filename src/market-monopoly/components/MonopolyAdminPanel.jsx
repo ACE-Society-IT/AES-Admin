@@ -48,47 +48,47 @@ function AdminPropertySvgBanner({ category = 'Residential', level = 0 }) {
       <rect width="280" height="135" rx="14" fill="url(#admPlinth)" />
 
       {/* 3D Isometric Platform */}
-      <polygon points="36,88 140,118 140,123 36,93" fill="#1A040B" stroke="#120207" strokeWidth="1" />
-      <polygon points="244,88 140,118 140,123 244,93" fill="#110207" stroke="#120207" strokeWidth="1" />
-      <polygon points="140,52 244,88 140,118 36,88" fill={groundTop} stroke={groundEdge} strokeWidth="1.8" strokeLinejoin="round" />
-      <polyline points="46,89 140,116 234,89" fill="none" stroke="#100206" strokeWidth="3" strokeLinecap="round" strokeDasharray="5 4" />
-      <polyline points="46,88 140,115 234,88" fill="none" stroke="#ECC37A" strokeWidth="1.2" strokeOpacity="0.8" strokeDasharray="5 4" />
+      <polygon points="32,98 140,126 140,131 32,103" fill="#1A040B" stroke="#120207" strokeWidth="1" />
+      <polygon points="248,98 140,126 140,131 248,103" fill="#110207" stroke="#120207" strokeWidth="1" />
+      <polygon points="140,68 248,98 140,126 32,98" fill={groundTop} stroke={groundEdge} strokeWidth="1.8" strokeLinejoin="round" />
+      <polyline points="42,99 140,124 238,99" fill="none" stroke="#100206" strokeWidth="3" strokeLinecap="round" strokeDasharray="5 4" />
+      <polyline points="42,98 140,123 238,98" fill="none" stroke="#ECC37A" strokeWidth="1.2" strokeOpacity="0.8" strokeDasharray="5 4" />
 
       {/* 3D Left Cottage */}
-      <rect x="68" y="64" width="28" height="24" fill={wallFront} stroke={strokeLine} strokeWidth="1.2" />
-      <polygon points="96,64 104,61 104,85 96,88" fill={wallSide} stroke={strokeLine} strokeWidth="1.2" />
-      <polygon points="66,64 82,53 98,64" fill={roofColor} stroke={strokeLine} strokeWidth="1.2" />
-      <polygon points="82,53 92,49 106,61 98,64" fill={roofSide} stroke={strokeLine} strokeWidth="1.2" />
-      <rect x="76" y="71" width="12" height="10" fill={windowFill} stroke={strokeLine} strokeWidth="0.8" />
+      <rect x="70" y="64" width="28" height="26" fill={wallFront} stroke={strokeLine} strokeWidth="1.2" />
+      <polygon points="98,64 104,58 104,84 98,90" fill={wallSide} stroke={strokeLine} strokeWidth="1.2" />
+      <polygon points="68,64 84,52 100,64" fill={roofColor} stroke={strokeLine} strokeWidth="1.2" />
+      <polygon points="84,52 90,46 106,58 100,64" fill={roofSide} stroke={strokeLine} strokeWidth="1.2" />
+      <rect x="77" y="72" width="12" height="11" fill={windowFill} stroke={strokeLine} strokeWidth="0.8" />
 
       {/* 3D Center Main Building */}
-      <rect x="102" y="36" width="44" height="52" fill={wallFront} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="146,36 166,41 166,85 146,88" fill={wallSide} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="99,36 126,22 149,36" fill={roofColor} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="126,22 146,27 169,41 149,36" fill={roofSide} stroke={strokeLine} strokeWidth="1.4" />
+      <rect x="105" y="38" width="42" height="52" fill={wallFront} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="147,38 168,42 168,85 147,90" fill={wallSide} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="102,38 128,24 150,38" fill={roofColor} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="128,24 150,34 171,42 150,38" fill={roofSide} stroke={strokeLine} strokeWidth="1.4" />
       {/* Windows */}
-      <rect x="110" y="43" width="9" height="8" fill={windowFill} />
-      <rect x="127" y="43" width="9" height="8" fill={windowFill} />
-      <rect x="110" y="56" width="9" height="8" fill={windowFill} />
-      <rect x="127" y="56" width="9" height="8" fill={windowFill} />
-      <rect x="117" y="70" width="14" height="18" fill={windowFill} />
+      <rect x="112" y="46" width="9" height="8" fill={windowFill} />
+      <rect x="129" y="46" width="9" height="8" fill={windowFill} />
+      <rect x="112" y="59" width="9" height="8" fill={windowFill} />
+      <rect x="129" y="59" width="9" height="8" fill={windowFill} />
+      <rect x="119" y="72" width="14" height="18" fill={windowFill} />
 
       {/* 3D Right Tower with Spire & Beacon */}
-      <rect x="170" y="30" width="28" height="58" fill={wallFront} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="198,30 208,27 208,82 198,88" fill={wallSide} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="167,30 184,14 201,30" fill={roofColor} stroke={strokeLine} strokeWidth="1.4" />
-      <polygon points="184,14 194,11 210,27 201,30" fill={roofSide} stroke={strokeLine} strokeWidth="1.4" />
-      <line x1="184" y1="5" x2="184" y2="14" stroke="#ECC37A" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="184" cy="4" r="3.5" fill="#ECC37A" stroke={strokeLine} strokeWidth="1" />
-      <rect x="176" y="38" width="7" height="7" fill={windowFill} />
-      <rect x="187" y="38" width="7" height="7" fill={windowFill} />
-      <rect x="176" y="51" width="7" height="7" fill={windowFill} />
-      <rect x="187" y="51" width="7" height="7" fill={windowFill} />
+      <rect x="173" y="29" width="28" height="61" fill={wallFront} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="201,29 209,24 209,79 201,88" fill={wallSide} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="170,29 187,14 204,29" fill={roofColor} stroke={strokeLine} strokeWidth="1.4" />
+      <polygon points="187,14 195,11 212,24 204,29" fill={roofSide} stroke={strokeLine} strokeWidth="1.4" />
+      <line x1="187" y1="5" x2="187" y2="14" stroke="#ECC37A" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="187" cy="4" r="3.5" fill="#ECC37A" stroke={strokeLine} strokeWidth="1" />
+      <rect x="179" y="37" width="7" height="7" fill={windowFill} />
+      <rect x="189" y="37" width="7" height="7" fill={windowFill} />
+      <rect x="179" y="50" width="7" height="7" fill={windowFill} />
+      <rect x="189" y="50" width="7" height="7" fill={windowFill} />
 
       {/* 3 Golden Spheres on the front-left edge */}
-      <circle cx="60" cy="95" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
-      <circle cx="74" cy="99" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
-      <circle cx="88" cy="103" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
+      <circle cx="58" cy="104" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
+      <circle cx="72" cy="107.6" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
+      <circle cx="86" cy="111.2" r="3.8" fill="#ECC37A" stroke={strokeLine} strokeWidth="1.2" />
     </svg>
   );
 }
