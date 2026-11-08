@@ -30,6 +30,7 @@ import { authAdminDirect, fetchGameStateDirect, managePasskeyDirect } from './li
 // Dynamic Code-Split Lazy Imports for Fast Initial Hub Loading
 const AdminPanel = lazy(() => import('./investomania/AdminPanel.jsx'));
 const AdminDashboardShell = lazy(() => import('./defend-the-empire/components/AdminDashboardShell.jsx'));
+const MonopolyAdminPanel = lazy(() => import('./market-monopoly/components/MonopolyAdminPanel.jsx'));
 
 function AdminModuleFallback({ title = 'Connecting to Module Cockpit...' }) {
   return (
@@ -556,7 +557,7 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
               Tournament Modules
             </h2>
             <span className="text-xs font-mono" style={{ color: 'var(--ink-muted)' }}>
-              2 Active · 1 Standby
+              3 Active Modules
             </span>
           </div>
 
@@ -670,52 +671,57 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
               </button>
             </div>
 
-            {/* Module 3: Market Monopoly (Standby) */}
+            {/* Module 3: Market Monopoly Admin */}
             <div
-              className="admin-card flex flex-col justify-between opacity-75"
-              style={{ borderTop: '3px solid var(--border)' }}
+              className="admin-card flex flex-col justify-between"
+              style={{ borderTop: '3px solid var(--brown-primary)' }}
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-xs"
-                    style={{ background: 'var(--card-inset)', border: '1px solid var(--border)', color: 'var(--ink-muted)' }}
+                    style={{ background: 'var(--card-inset)', border: '1px solid var(--border)', color: 'var(--brown-primary)' }}
                   >
                     MNP
                   </div>
-                  <span className="admin-pill">
-                    STANDBY
+                  <span
+                    className="admin-pill text-[#16A34A]"
+                    style={{ background: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.35)' }}
+                  >
+                    <Activity className="w-3 h-3 text-[#16A34A]" />
+                    READY · 25 AREAS
                   </span>
                 </div>
 
-                <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--ink-muted)' }}>
+                <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--brown-primary)' }}>
                   Module 03
                 </div>
                 <h3 className="text-lg font-bold mb-1 tracking-tight" style={{ color: 'var(--ink-white)' }}>
-                  Market Monopoly
+                  Market Monopoly Admin
                 </h3>
                 <p className="text-xs mb-4" style={{ color: 'var(--ink-gray)' }}>
-                  Asset acquisition, cartel bidding wars & liquidity arena. Ready for module drop-in.
+                  Karachi property auction record-keeper, 17 utilities, level upgrades & spin-wheel rent transfers.
                 </p>
 
                 <div className="grid grid-cols-2 gap-2 mb-5">
                   <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Status</div>
-                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-gray)' }}>Standby</div>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Properties</div>
+                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-white)' }}>25 Karachi</div>
                   </div>
                   <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Route</div>
-                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-gray)' }}>/monopoly</div>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Utilities</div>
+                    <div className="text-xs font-mono font-bold text-[#16A34A] mt-0.5">17 Items</div>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={() => navigate('/monopoly')}
-                className="admin-btn admin-btn-secondary w-full justify-center text-xs"
+                className="admin-btn admin-btn-brown w-full justify-center text-xs"
               >
-                <Layers className="w-3.5 h-3.5" style={{ color: 'var(--ink-muted)' }} />
-                Open Standby Console
+                <Layers className="w-3.5 h-3.5" />
+                Open Monopoly Admin
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </button>
             </div>
 
@@ -962,6 +968,15 @@ function DefendAdminRoute() {
   );
 }
 
+function MonopolyAdminRoute() {
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<AdminModuleFallback title="Opening Market Monopoly Admin..." />}>
+      <MonopolyAdminPanel onBackToHub={() => navigate('/')} />
+    </Suspense>
+  );
+}
+
 export default function App() {
   // Passkey always starts empty so credentials are never pre-filled or visible
   const [passkey, setPasskey] = useState('');
@@ -986,7 +1001,8 @@ export default function App() {
         <Route path="/investomania/*" element={<InvestomaniaAdminRoute />} />
         <Route path="/defend/*" element={<DefendAdminRoute />} />
         <Route path="/defend" element={<DefendAdminRoute />} />
-        <Route path="/monopoly" element={<PlaceholderModuleView name="Market Monopoly" />} />
+        <Route path="/monopoly/*" element={<MonopolyAdminRoute />} />
+        <Route path="/monopoly" element={<MonopolyAdminRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
