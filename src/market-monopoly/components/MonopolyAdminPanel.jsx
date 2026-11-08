@@ -190,9 +190,9 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
     setTimeout(() => setFeedback(null), 3200);
   };
 
-  const refreshStore = useCallback(async () => {
+  const refreshStore = useCallback(async (forceFresh = false) => {
     try {
-      const loaded = await fetchMonopolyStore();
+      const loaded = await fetchMonopolyStore(forceFresh);
       setStore(loaded);
     } catch (err) {
       console.error('Supabase refreshStore error:', err);
@@ -200,7 +200,7 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
   }, []);
 
   useEffect(() => {
-    refreshStore();
+    refreshStore(true);
 
     const sub = supabase
       .channel('monopoly_admin_updates')
@@ -208,14 +208,23 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'monopoly_state', filter: 'id=eq.1' },
         () => {
-          refreshStore();
+          refreshStore(true);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'monopoly_teams' },
+        () => {
+          refreshStore(true);
         }
       )
       .subscribe();
 
     const pollInterval = setInterval(() => {
-      refreshStore();
-    }, 2500);
+      if (document.visibilityState === 'visible') {
+        refreshStore(false);
+      }
+    }, 5000);
 
     return () => {
       supabase.removeChannel(sub);

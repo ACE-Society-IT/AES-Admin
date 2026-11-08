@@ -120,10 +120,24 @@ export function hydrateMonopolyState(rawState) {
   };
 }
 
-export async function fetchMonopolyStore() {
+// Local in-memory caching to optimize Admin response times and avoid duplicate round-trips
+let _adminCachedStore = null;
+let _adminCachedAt = 0;
+const ADMIN_CACHE_TTL_MS = 1000;
+
+export function invalidateAdminMonopolyCache() {
+  _adminCachedStore = null;
+  _adminCachedAt = 0;
+}
+
+export async function fetchMonopolyStore(forceFresh = false) {
+  if (!forceFresh && _adminCachedStore && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
+    return _adminCachedStore;
+  }
+
   const [stateRes, teamsRes] = await Promise.all([
     supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
-    supabase.from('monopoly_teams').select('*').order('updated_at', { ascending: true })
+    supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true })
   ]);
 
   if (stateRes.error) {
@@ -142,6 +156,7 @@ export async function fetchMonopolyStore() {
       }))
     : null;
 
+  let result;
   if (stateRes.data?.state_json && typeof stateRes.data.state_json === 'object') {
     const raw = { ...stateRes.data.state_json };
     // Authoritative teams list comes from monopoly_teams table if available, otherwise raw.teams
@@ -150,19 +165,26 @@ export async function fetchMonopolyStore() {
     } else if (!Array.isArray(raw.teams)) {
       raw.teams = [];
     }
-    return hydrateMonopolyState(raw);
+    result = hydrateMonopolyState(raw);
+  } else {
+    const initial = getInitialStore();
+    if (dbTeams && dbTeams.length > 0) {
+      initial.teams = dbTeams;
+    }
+    await persistMonopolyStore(initial);
+    result = initial;
   }
 
-  const initial = getInitialStore();
-  if (dbTeams && dbTeams.length > 0) {
-    initial.teams = dbTeams;
-  }
-  await persistMonopolyStore(initial);
-  return initial;
+  _adminCachedStore = result;
+  _adminCachedAt = Date.now();
+  return result;
 }
 
 export async function persistMonopolyStore(nextStore) {
   const hydrated = hydrateMonopolyState({ ...nextStore, updatedAt: Date.now() });
+
+  _adminCachedStore = hydrated;
+  _adminCachedAt = Date.now();
 
   const compact = {
     currentRound: hydrated.currentRound,
