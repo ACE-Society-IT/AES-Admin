@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AES 2026 Master Admin · Rounded Editorial Monochrome</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Absolute Zero Motion Policy (Strict Tournament Readiness) */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      animation: none !important;
+      transition: none !important;
+    }
+
+    :root {
+      --canvas: #F4F4F6;
+      --card: #FFFFFF;
+      --sidebar: #FFFFFF;
+      --subtle: #FAFAFC;
+      --border: #E4E4E7;
+      --border-light: #ECECEE;
+      --ink: #0F0F11;
+      --ink-secondary: #52525B;
+      --ink-muted: #71717A;
+      --ink-light: #A1A1AA;
+      --green: #12B76A;
+      --red: #D92D20;
+      --radius-outer: 28px;
+      --radius-card: 20px;
+      --radius-pill: 9999px;
+    }
+
+    body {
+      background-color: var(--canvas);
+      color: var(--ink);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .font-serif { font-family: 'Newsreader', Georgia, serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+    /* Focus accessibility */
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--ink) !important;
+      outline-offset: 2px !important;
+    }
+
+    /* Layout Shell */
+    .app-shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 20px;
+      min-height: calc(100vh - 48px);
+    }
+
+    /* Left Sidebar */
+    .sidebar {
+      background: var(--sidebar);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-outer);
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .brand-title {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .nav-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-light);
+      margin-bottom: 8px;
+      padding-left: 10px;
+    }
+
+    /* Module Switcher Pills */
+    .module-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink-secondary);
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+
+    .module-item.active {
+      background: var(--ink);
+      color: #FFFFFF;
+      border-color: var(--ink);
+    }
+
+    .module-item .name {
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .module-item .desc {
+      font-size: 11px;
+      opacity: 0.75;
+      margin-top: 2px;
+      padding-left: 20px;
+    }
+
+    .module-item:not(.active):hover {
+      background: var(--canvas);
+      color: var(--ink);
+    }
+
+    /* Subnav Links */
+    .subnav-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 14px;
+      color: var(--ink-secondary);
+      font-weight: 600;
+      font-size: 12px;
+      text-decoration: none;
+      margin-bottom: 4px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+    }
+
+    .subnav-link.active {
+      background: var(--canvas);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .subnav-link:hover:not(.active) {
+      background: var(--subtle);
+      color: var(--ink);
+    }
+
+    /* Main Cockpit Stage */
+    .main-stage {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 32px;
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Top Strip */
+    .top-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--canvas);
+      color: var(--ink);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: var(--radius-pill);
+      background: var(--green);
+    }
+
+    .status-dot.paused {
+      background: #F59E0B;
+    }
+
+    /* Cards */
+    .clean-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 24px;
+    }
+
+    .clean-card-soft {
+      background: var(--subtle);
+      border: 1px solid var(--border-light);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    /* Buttons */
+    .pill-btn {
+      padding: 10px 20px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+    }
+
+    .pill-btn-solid {
+      background: var(--ink);
+      color: #FFFFFF;
+      border-color: var(--ink);
+    }
+
+    .pill-btn-solid:hover {
+      background: #27272A;
+    }
+
+    .pill-btn-outline {
+      background: #FFFFFF;
+      color: var(--ink);
+      border: 1px solid var(--border);
+    }
+
+    .pill-btn-outline:hover {
+      background: var(--canvas);
+      border-color: var(--ink);
+    }
+
+    .pill-btn-danger {
+      background: #FFFFFF;
+      color: var(--red);
+      border: 1px solid #FECACA;
+    }
+
+    .pill-btn-danger:hover {
+      background: #FEF2F2;
+      border-color: var(--red);
+    }
+
+    .pill-input {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 10px 18px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      background: #FFFFFF;
+      min-height: 40px;
+    }
+
+    .pill-input:focus {
+      border-color: var(--ink);
+    }
+
+    /* Tables */
+    .table-container {
+      border: 1px solid var(--border-light);
+      border-radius: 20px;
+      overflow: hidden;
+      background: #FFFFFF;
+    }
+
+    .ledger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .ledger-table th {
+      background: var(--subtle);
+      padding: 12px 18px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink-muted);
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .ledger-table td {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--canvas);
+      color: var(--ink);
+    }
+
+    .ledger-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .ledger-table tr:hover td {
+      background: #FAF9FB;
+    }
+
+    /* Icon Utility */
+    .icon {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vertical-align: middle;
+    }
+
+    /* View Tab Panels */
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; gap: 24px; }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+
+    <!-- Left Dock -->
+    <aside class="sidebar">
+      <div>
+        <!-- Summit Brand -->
+        <div style="padding-bottom: 22px; border-bottom: 1px solid var(--border-light); margin-bottom: 22px;">
+          <h1 class="brand-title font-serif">Alpha Ace 2026</h1>
+          <p class="brand-sub">Master Administration Cockpit</p>
+          <div style="margin-top: 10px;">
+            <span class="status-pill font-mono" style="font-size: 10px;">
+              <span class="status-dot"></span>
+              Passkey: Root Organizer
+            </span>
+          </div>
+        </div>
+
+        <!-- 3 Module Switcher -->
+        <div style="margin-bottom: 26px;">
+          <div class="nav-label">Select Module</div>
+
+          <button class="module-item active" onclick="switchModule('investomania', this)">
+            <div class="name">
+              <svg class="icon" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+              01. Investomania
+            </div>
+            <div class="desc">PSX stocks, breaking news, trading floor</div>
+          </button>
+
+          <button class="module-item" onclick="switchModule('venture', this)">
+            <div class="name">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+              02. Venture Arena
+            </div>
+            <div class="desc">Pitch decks, jury scoring, investor Q&A</div>
+          </button>
+
+          <button class="module-item" onclick="switchModule('case', this)">
+            <div class="name">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              03. Case Chronicles
+            </div>
+            <div class="desc">Case rounds, rubric evaluations, finals</div>
+          </button>
+        </div>
+
+        <!-- Section Navigation -->
+        <div>
+          <div class="nav-label">Controls</div>
+          <button class="subnav-link active" onclick="switchTab('tab-cockpit', this)">
+            <span>Floor & Crises Sequence</span>
+            <span class="font-mono" style="font-size: 10px; opacity: 0.6;">R1</span>
+          </button>
+          <button class="subnav-link" onclick="switchTab('tab-teams', this)">
+            <span>Contestant Teams</span>
+            <span class="font-mono" style="font-size: 10px; opacity: 0.6;">24</span>
+          </button>
+          <button class="subnav-link" onclick="switchTab('tab-passkeys', this)">
+            <span>Admin Passkeys</span>
+            <span class="font-mono" style="font-size: 10px; opacity: 0.6;">2</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom Profile -->
+      <div style="padding-top: 18px; border-top: 1px solid var(--border-light);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 700; font-size: 12px;">Chief Director</div>
+            <div style="font-size: 11px; color: var(--ink-muted);">admin.alphaace.com.pk</div>
+          </div>
+          <button class="pill-btn pill-btn-outline" style="padding: 6px 14px; font-size: 11px; min-height: 32px;" onclick="alert('Session locked. Enter passkey to resume.')">
+            Lock
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Cockpit Stage -->
+    <main class="main-stage">
+
+      <!-- View Panel: Cockpit -->
+      <div id="tab-cockpit" class="view-panel active">
+        <!-- Top Strip -->
+        <header class="top-strip">
+          <div>
+            <h2 id="module-heading" class="font-serif" style="font-size: 26px; font-weight: 600;">Investomania Floor Management</h2>
+            <p id="module-subheading" style="color: var(--ink-muted); font-size: 13px; margin-top: 2px;">
+              Round 1 is active. Contestants are currently decrypting breaking news.
+            </p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="status-pill font-mono" style="font-size: 12px; padding: 8px 16px;">
+              <span id="floor-dot" class="status-dot"></span>
+              Floor Clock: <strong id="floor-clock">02:45</strong>
+            </div>
+            <button id="toggle-floor-btn" class="pill-btn pill-btn-solid" onclick="toggleFloor()">Pause Floor</button>
+            <button class="pill-btn pill-btn-outline" onclick="resetRound()">Reset Round</button>
+          </div>
+        </header>
+
+        <!-- 3-Step Humanized Crisis Flow -->
+        <section class="clean-card">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted);">
+                Live Crisis Dispatch Sequence
+              </div>
+              <h3 class="font-serif" style="font-size: 21px; font-weight: 600; margin-top: 4px;">
+                Ready to release the next market news story?
+              </h3>
+              <p style="color: var(--ink-muted); font-size: 13px; margin-top: 2px;">
+                Select a story, give teams a reading window, open the floor for trades, then shift the market prices.
+              </p>
+            </div>
+            <span id="story-status-tag" class="status-pill font-mono">Story 2 of 8 Drafted</span>
+          </div>
+
+          <!-- Configuration Grid -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; margin-bottom: 18px;">
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: var(--ink-muted); margin-bottom: 6px;">Which news story would you like to put out?</label>
+              <select id="crisis-picker" class="pill-input font-mono" style="width: 100%; border-radius: 16px;" onchange="changeStoryPreview()">
+                <option value="rate-hike">Story 2 · [PSX-C2] State Bank Hikes Policy Rate by 150bps</option>
+                <option value="textile">Story 3 · [PSX-C3] Textile Export Subsidy Revoked (Draft)</option>
+                <option value="oil-crisis">Story 4 · [PSX-C4] Gulf Supply Disruption at Gwadar Port</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: var(--ink-muted); margin-bottom: 6px;">Reading window (minutes)</label>
+              <input id="reading-mins" type="number" value="3" class="pill-input font-mono" style="width: 100%;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: var(--ink-muted); margin-bottom: 6px;">Trading window (minutes)</label>
+              <input id="trading-mins" type="number" value="5" class="pill-input font-mono" style="width: 100%;">
+            </div>
+          </div>
+
+          <!-- Story Details Card -->
+          <div class="clean-card-soft" style="margin-bottom: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <div>
+                <span class="status-pill font-mono" style="font-size: 10px; background: #FFFFFF; border: 1px solid var(--border);">Active Draft</span>
+                <h4 id="story-title" style="font-size: 15px; font-weight: 700; margin-top: 8px;">State Bank Hikes Policy Rate by 150bps Following Inflation Spike</h4>
+                <p id="story-desc" style="color: var(--ink-secondary); font-size: 12px; margin-top: 4px; max-width: 780px;">
+                  The central bank executes an emergency rate hike to anchor inflation. Commercial banks see immediate interest margin gains while leveraged cement and auto firms take severe hits.
+                </p>
+              </div>
+              <div id="story-impacts" class="font-mono" style="font-size: 11px; text-align: right;">
+                <div style="font-weight: 700; color: var(--green);">MCB (+4.2%) · MEBL (+3.8%)</div>
+                <div style="color: var(--red); margin-top: 2px;">LUCK (-3.5%) · DGKC (-4.1%)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Humanized Buttons -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+            <button id="step-1-btn" class="pill-btn pill-btn-solid" style="padding: 14px 20px; justify-content: center; flex-direction: column; text-align: center; min-height: 60px;" onclick="executeStep1()">
+              <span id="step-1-title" style="font-weight: 700;">1. Release the News</span>
+              <span id="step-1-sub" style="font-size: 10px; font-weight: 500; opacity: 0.85;">Starts 3m reading window (floor closed)</span>
+            </button>
+            
+            <button id="step-2-btn" class="pill-btn pill-btn-outline" style="padding: 14px 20px; justify-content: center; flex-direction: column; text-align: center; min-height: 60px; opacity: 0.5;" onclick="executeStep2()" disabled>
+              <span id="step-2-title" style="font-weight: 700;">2. Open the Trading Floor</span>
+              <span id="step-2-sub" style="font-size: 10px; font-weight: 500; opacity: 0.85;">Unlocks market for 5m of live trades</span>
+            </button>
+            
+            <button id="step-3-btn" class="pill-btn pill-btn-outline" style="padding: 14px 20px; justify-content: center; flex-direction: column; text-align: center; min-height: 60px; opacity: 0.5;" onclick="executeStep3()" disabled>
+              <span id="step-3-title" style="font-weight: 700;">3. Shift Stock Prices</span>
+              <span id="step-3-sub" style="font-size: 10px; font-weight: 500; opacity: 0.85;">Applies price impacts across PSX</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- Live Stocks Overview Strip -->
+        <section class="clean-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div>
+              <h3 class="font-serif" style="font-size: 18px; font-weight: 600;">PSX Market Board</h3>
+              <p style="color: var(--ink-muted); font-size: 12px;">Live benchmark prices and active price shock statuses.</p>
+            </div>
+            <span class="status-pill font-mono">10 Stocks Active</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+            <div class="clean-card-soft" style="padding: 14px;">
+              <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                <span>MCB Bank</span>
+                <span class="font-mono">PKR 214.50</span>
+              </div>
+              <div class="font-mono" style="font-size: 11px; color: var(--green); margin-top: 4px;">+4.2% Post-Crisis</div>
+            </div>
+            <div class="clean-card-soft" style="padding: 14px;">
+              <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                <span>Lucky Cement</span>
+                <span class="font-mono">PKR 812.00</span>
+              </div>
+              <div class="font-mono" style="font-size: 11px; color: var(--red); margin-top: 4px;">-3.5% Post-Crisis</div>
+            </div>
+            <div class="clean-card-soft" style="padding: 14px;">
+              <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                <span>Engro Corp</span>
+                <span class="font-mono">PKR 342.10</span>
+              </div>
+              <div class="font-mono" style="font-size: 11px; color: var(--ink-muted); margin-top: 4px;">0.0% Stable</div>
+            </div>
+            <div class="clean-card-soft" style="padding: 14px;">
+              <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                <span>Systems Ltd</span>
+                <span class="font-mono">PKR 468.90</span>
+              </div>
+              <div class="font-mono" style="font-size: 11px; color: var(--green); margin-top: 4px;">+1.8% Tech Bull</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- View Panel: Teams -->
+      <div id="tab-teams" class="view-panel">
+        <header class="top-strip">
+          <div>
+            <h2 class="font-serif" style="font-size: 26px; font-weight: 600;">Participating Teams & Passcodes</h2>
+            <p style="color: var(--ink-muted); font-size: 13px; margin-top: 2px;">
+              Shared across all three modules on <strong>alphaace.com.pk</strong>.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" placeholder="Search team by name..." class="pill-input font-mono" style="padding: 7px 16px; font-size: 11px;">
+            <button class="pill-btn pill-btn-solid" onclick="alert('Add team dialog opens here.')">+ Add New Team</button>
+          </div>
+        </header>
+
+        <div class="table-container">
+          <table class="ledger-table font-mono">
+            <thead>
+              <tr>
+                <th>Team Name</th>
+                <th>Desk Passcode</th>
+                <th>Starting Budget</th>
+                <th>Cash in Hand</th>
+                <th>Investomania Net</th>
+                <th>Venture Score</th>
+                <th>Case Rank</th>
+                <th style="text-align: right;">Options</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight: 700; color: var(--ink);">Alpha Hawks</td>
+                <td><span style="background: var(--canvas); padding: 4px 8px; border-radius: 8px;">ALPH-9021</span></td>
+                <td>PKR 100,000</td>
+                <td>PKR 42,500</td>
+                <td style="color: var(--green); font-weight: 700;">+PKR 14,200</td>
+                <td>88.5 / 100</td>
+                <td>#2</td>
+                <td style="text-align: right;">
+                  <button class="pill-btn pill-btn-outline" style="padding: 4px 12px; font-size: 11px; min-height: 28px;">Reset Code</button>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-weight: 700; color: var(--ink);">Indus Capital</td>
+                <td><span style="background: var(--canvas); padding: 4px 8px; border-radius: 8px;">INDU-4412</span></td>
+                <td>PKR 100,000</td>
+                <td>PKR 88,000</td>
+                <td style="color: var(--red); font-weight: 700;">-PKR 3,400</td>
+                <td>92.0 / 100</td>
+                <td>#1</td>
+                <td style="text-align: right;">
+                  <button class="pill-btn pill-btn-outline" style="padding: 4px 12px; font-size: 11px; min-height: 28px;">Reset Code</button>
+                </td>
+              </tr>
+              <tr>
+                <td style="font-weight: 700; color: var(--ink);">Karachi Bull Syndicate</td>
+                <td><span style="background: var(--canvas); padding: 4px 8px; border-radius: 8px;">KBS-8819</span></td>
+                <td>PKR 100,000</td>
+                <td>PKR 91,400</td>
+                <td style="color: var(--green); font-weight: 700;">+PKR 28,900</td>
+                <td>79.4 / 100</td>
+                <td>#4</td>
+                <td style="text-align: right;">
+                  <button class="pill-btn pill-btn-outline" style="padding: 4px 12px; font-size: 11px; min-height: 28px;">Reset Code</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- View Panel: Passkeys -->
+      <div id="tab-passkeys" class="view-panel">
+        <header class="top-strip">
+          <div>
+            <h2 class="font-serif" style="font-size: 26px; font-weight: 600;">Admin Keys & Authorization</h2>
+            <p style="color: var(--ink-muted); font-size: 13px; margin-top: 2px;">
+              Generate and revoke dynamic secret passkeys for directors, jury scorekeepers, and room proctors.
+            </p>
+          </div>
+          <button class="pill-btn pill-btn-solid" onclick="createPasskeyPrompt()">+ Create New Passkey</button>
+        </header>
+
+        <div class="clean-card">
+          <div class="table-container">
+            <table class="ledger-table font-mono" id="passkey-table">
+              <thead>
+                <tr>
+                  <th>Key Label / Operator</th>
+                  <th>Passkey Code</th>
+                  <th>Permission Scope</th>
+                  <th>Created At</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight: 700;">Default Master Key</td>
+                  <td><code>alphaace_admin_2026</code></td>
+                  <td><span class="status-pill" style="font-size: 10px;">Full Root Access</span></td>
+                  <td>System Default</td>
+                  <td style="text-align: right; color: var(--ink-muted); font-size: 11px;">Protected (Root)</td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 700;">Floor Director Desk 1</td>
+                  <td><code>key_investo_lead_782</code></td>
+                  <td><span class="status-pill" style="font-size: 10px;">Investomania Floor</span></td>
+                  <td>Nov 7, 2026 18:30</td>
+                  <td style="text-align: right;">
+                    <button class="pill-btn pill-btn-danger" style="padding: 4px 12px; font-size: 11px; min-height: 28px;" onclick="revokeKey(this)">Revoke</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // State
+    let floorPaused = false;
+    let currentStep = 1;
+
+    function switchModule(mod, el) {
+      document.querySelectorAll('.module-item').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+
+      const heading = document.getElementById('module-heading');
+      const subheading = document.getElementById('module-subheading');
+
+      if (mod === 'investomania') {
+        heading.innerText = 'Investomania Floor Management';
+        subheading.innerText = 'Round 1 is active. Contestants are currently decrypting breaking news.';
+      } else if (mod === 'venture') {
+        heading.innerText = 'Venture Arena Cockpit';
+        subheading.innerText = 'Pitch Session A in progress. 6 teams queued for 7-minute presentations.';
+      } else if (mod === 'case') {
+        heading.innerText = 'Case Chronicles Management';
+        subheading.innerText = 'Round 2 Submissions open. Rubric evaluations active for 18 teams.';
+      }
+    }
+
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.subnav-link').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function toggleFloor() {
+      floorPaused = !floorPaused;
+      const btn = document.getElementById('toggle-floor-btn');
+      const dot = document.getElementById('floor-dot');
+
+      if (floorPaused) {
+        btn.innerText = 'Resume Floor';
+        btn.className = 'pill-btn pill-btn-outline';
+        dot.className = 'status-dot paused';
+      } else {
+        btn.innerText = 'Pause Floor';
+        btn.className = 'pill-btn pill-btn-solid';
+        dot.className = 'status-dot';
+      }
+    }
+
+    function resetRound() {
+      if (confirm('Are you sure you want to reset the current round to starting balances?')) {
+        alert('Round 1 has been reset to base state.');
+      }
+    }
+
+    function changeStoryPreview() {
+      const picker = document.getElementById('crisis-picker');
+      const val = picker.value;
+      const title = document.getElementById('story-title');
+      const desc = document.getElementById('story-desc');
+      const impacts = document.getElementById('story-impacts');
+
+      if (val === 'rate-hike') {
+        title.innerText = 'State Bank Hikes Policy Rate by 150bps Following Inflation Spike';
+        desc.innerText = 'The central bank executes an emergency rate hike to anchor inflation. Commercial banks see immediate interest margin gains while leveraged cement and auto firms take severe hits.';
+        impacts.innerHTML = '<div style="font-weight: 700; color: var(--green);">MCB (+4.2%) · MEBL (+3.8%)</div><div style="color: var(--red); margin-top: 2px;">LUCK (-3.5%) · DGKC (-4.1%)</div>';
+      } else if (val === 'textile') {
+        title.innerText = 'Federal Government Revokes Zero-Rated Duty on Textile Exports';
+        desc.innerText = 'Export subsidies are rolled back under fiscal consolidation directives. Export-oriented spinning mills plunge while state revenue expectations increase.';
+        impacts.innerHTML = '<div style="font-weight: 700; color: var(--red);">NML (-5.6%) · GATM (-4.8%)</div><div style="color: var(--green); margin-top: 2px;">HBL (+1.1%)</div>';
+      } else if (val === 'oil-crisis') {
+        title.innerText = 'Gulf Shipping Disruption Leads to Fuel Import Delays at Gwadar Port';
+        desc.innerText = 'Strait of Hormuz congestion leaves fuel tankers waiting offshore. Oil marketing companies see inventory margins surge while power generation utilities face severe cost shocks.';
+        impacts.innerHTML = '<div style="font-weight: 700; color: var(--green);">OGDC (+6.4%) · PSO (+5.2%)</div><div style="color: var(--red); margin-top: 2px;">HUBC (-4.9%) · KEL (-3.8%)</div>';
+      }
+    }
+
+    // Step 1: Release News
+    function executeStep1() {
+      const readingMins = document.getElementById('reading-mins').value || 3;
+      document.getElementById('step-1-title').innerText = '✓ News Out (3m Decrypting)';
+      document.getElementById('step-1-btn').className = 'pill-btn pill-btn-outline';
+      
+      const s2Btn = document.getElementById('step-2-btn');
+      s2Btn.disabled = false;
+      s2Btn.style.opacity = '1';
+      s2Btn.className = 'pill-btn pill-btn-solid';
+      
+      document.getElementById('story-status-tag').innerText = 'Reading Window Live';
+      document.getElementById('floor-clock').innerText = '03:00';
+      alert('Breaking news story broadcast to all desks. Contestants are in reading mode (Trading floor locked).');
+    }
+
+    // Step 2: Open Trading Floor
+    function executeStep2() {
+      const tradingMins = document.getElementById('trading-mins').value || 5;
+      document.getElementById('step-2-title').innerText = '✓ Trading Floor Open';
+      document.getElementById('step-2-btn').className = 'pill-btn pill-btn-outline';
+
+      const s3Btn = document.getElementById('step-3-btn');
+      s3Btn.disabled = false;
+      s3Btn.style.opacity = '1';
+      s3Btn.className = 'pill-btn pill-btn-solid';
+
+      document.getElementById('story-status-tag').innerText = 'Live Trading Active (5m)';
+      document.getElementById('floor-clock').innerText = '05:00';
+      alert('Trading floor is now OPEN! Contestants can buy and sell on PSX stocks.');
+    }
+
+    // Step 3: Shift Stock Prices
+    function executeStep3() {
+      document.getElementById('step-3-title').innerText = '✓ Prices Shifted';
+      document.getElementById('step-3-btn').className = 'pill-btn pill-btn-outline';
+      document.getElementById('story-status-tag').innerText = 'Shocks Applied to Portfolios';
+      alert('Stock prices shifted successfully! Contestant portfolios have been recalculated with the price shock impacts.');
+    }
+
+    function createPasskeyPrompt() {
+      const label = prompt('Enter a label for this new access key (e.g. "Jury Panel Room B"):');
+      if (!label) return;
+      const key = 'key_' + Math.random().toString(36).substring(2, 9);
+      
+      const tbody = document.querySelector('#passkey-table tbody');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td style="font-weight: 700;">${label}</td>
+        <td><code>${key}</code></td>
+        <td><span class="status-pill" style="font-size: 10px;">Sub-Admin Scope</span></td>
+        <td>Just now</td>
+        <td style="text-align: right;">
+          <button class="pill-btn pill-btn-danger" style="padding: 4px 12px; font-size: 11px; min-height: 28px;" onclick="revokeKey(this)">Revoke</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+      alert('New Passkey created: ' + key);
+    }
+
+    function revokeKey(btn) {
+      if (confirm('Are you sure you want to revoke this passkey? The operator will be immediately logged out.')) {
+        btn.closest('tr').remove();
+      }
+    }
+  </script>
+
+</body>
+</html>

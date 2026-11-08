@@ -1,0 +1,994 @@
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import {
+  Shield,
+  ShieldAlert,
+  Lock,
+  Unlock,
+  Activity,
+  Database,
+  Server,
+  ArrowRight,
+  TrendingUp,
+  LogOut,
+  Clock,
+  Layers,
+  KeyRound,
+  Sun,
+  Moon,
+  Plus,
+  Trash2,
+  Copy,
+  Check,
+  X
+} from 'lucide-react';
+import aesLogo from './assets/aes-logo.png';
+import investomaniaLogo from './assets/InvestomaniaLogo.png';
+import { GameProvider } from './context/GameContext.jsx';
+import { authAdminDirect, fetchGameStateDirect, managePasskeyDirect } from './lib/supabaseGameService.js';
+
+// Dynamic Code-Split Lazy Imports for Fast Initial Hub Loading
+const AdminPanel = lazy(() => import('./investomania/AdminPanel.jsx'));
+const AdminDashboardShell = lazy(() => import('./defend-the-empire/components/AdminDashboardShell.jsx'));
+
+function AdminModuleFallback({ title = 'Connecting to Module Cockpit...' }) {
+  return (
+    <div className="admin-executive-hub min-h-screen flex items-center justify-center p-6">
+      <div className="admin-card max-w-sm w-full p-8 text-center space-y-3.5 shadow-lg">
+        <div className="w-8 h-8 mx-auto border-2 border-[#8D5B3A] border-t-transparent rounded-full animate-spin" />
+        <h3 className="text-sm font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+          {title}
+        </h3>
+        <p className="text-xs font-mono" style={{ color: 'var(--ink-gray)' }}>
+          Synchronizing tournament engine state...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Spacious Executive Dual Theme: Brown, White, Black & Gray
+const STYLES = `
+  .admin-executive-hub {
+    background-color: var(--canvas);
+    color: var(--ink-white);
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    transition: background-color 160ms ease, color 160ms ease;
+  }
+
+  /* Dark Theme Tokens */
+  .admin-executive-hub[data-theme="dark"] {
+    --canvas: #0C0A09;
+    --card: #181513;
+    --card-inset: #221D1A;
+    --card-hover: #26201D;
+    --border: #332A25;
+    --border-subtle: #29221E;
+    --brown-primary: #8D5B3A;
+    --brown-hover: #A56F48;
+    --brown-border: #4D372B;
+    --ink-white: #FFFFFF;
+    --ink-bone: #F5EFEB;
+    --ink-gray: #A8A29E;
+    --ink-muted: #78716C;
+    --accent-green: #16A34A;
+    --accent-red: #DC2626;
+    --accent-yellow: #EAB308;
+    --pill-bg: #221D1A;
+    --pill-text: #A8A29E;
+    --pill-border: #332A25;
+    --btn-sec-bg: #221D1A;
+    --btn-sec-text: #F5EFEB;
+    --btn-sec-border: #382E2B;
+    --btn-sec-hover: #2C2521;
+    --input-bg: #221D1A;
+    --input-border: #382E2B;
+    --input-text: #FFFFFF;
+    --tag-border: #3D322C;
+    --modal-bg: #181513;
+    --modal-overlay: rgba(0, 0, 0, 0.75);
+  }
+
+  /* White / Light Theme Tokens */
+  .admin-executive-hub[data-theme="light"] {
+    --canvas: #F9F8F6;
+    --card: #FFFFFF;
+    --card-inset: #F4EFEB;
+    --card-hover: #F8F5F1;
+    --border: #E5DFD7;
+    --border-subtle: #EDE8E2;
+    --brown-primary: #8D5B3A;
+    --brown-hover: #73482C;
+    --brown-border: #D1B8A5;
+    --ink-white: #1C1917;
+    --ink-bone: #44403C;
+    --ink-gray: #78716C;
+    --ink-muted: #A8A29E;
+    --accent-green: #15803D;
+    --accent-red: #B91C1C;
+    --accent-yellow: #B45309;
+    --pill-bg: #F4EFEB;
+    --pill-text: #57534E;
+    --pill-border: #E5DFD7;
+    --btn-sec-bg: #FFFFFF;
+    --btn-sec-text: #1C1917;
+    --btn-sec-border: #E5DFD7;
+    --btn-sec-hover: #F4EFEB;
+    --input-bg: #FFFFFF;
+    --input-border: #E5DFD7;
+    --input-text: #1C1917;
+    --tag-border: #D8CEBE;
+    --modal-bg: #FFFFFF;
+    --modal-overlay: rgba(28, 25, 23, 0.45);
+  }
+
+  .admin-executive-hub .font-mono {
+    font-family: 'JetBrains Mono', SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  
+  .admin-btn {
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+    user-select: none;
+  }
+  
+  .admin-btn-brown {
+    background: var(--brown-primary);
+    color: #FFFFFF;
+    border-color: var(--brown-primary);
+  }
+  .admin-btn-brown:hover {
+    background: var(--brown-hover);
+    border-color: #B88057;
+  }
+  .admin-btn-brown:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  
+  .admin-btn-secondary {
+    background: var(--btn-sec-bg);
+    color: var(--btn-sec-text);
+    border: 1px solid var(--btn-sec-border);
+  }
+  .admin-btn-secondary:hover {
+    background: var(--btn-sec-hover);
+    border-color: var(--brown-border);
+  }
+  
+  .admin-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+  
+  .admin-input {
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+    background: var(--input-bg);
+    color: var(--input-text);
+    outline: none;
+    transition: border-color 140ms ease;
+  }
+  .admin-input:focus {
+    border-color: var(--brown-primary);
+  }
+  
+  .admin-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    color: var(--pill-text);
+  }
+`;
+
+function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey }) {
+  const navigate = useNavigate();
+  const [telemetry, setTelemetry] = useState(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  
+  // Theme state: 'dark' vs 'light'
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem('alphaace_admin_theme') || 'dark');
+
+  // Credentials Management Modal State
+  const [showCredModal, setShowCredModal] = useState(false);
+  const [adminPasskeys, setAdminPasskeys] = useState([]);
+  const [newKeyInput, setNewKeyInput] = useState('');
+  const [newLabelInput, setNewLabelInput] = useState('');
+  const [credLoading, setCredLoading] = useState(false);
+  const [credMsg, setCredMsg] = useState({ text: '', type: '' });
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-admin-theme', themeMode);
+    document.documentElement.setAttribute('data-theme', themeMode);
+    document.body.setAttribute('data-admin-theme', themeMode);
+    if (themeMode === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.style.backgroundColor = '#0C0A09';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.style.backgroundColor = '#F9F8F6';
+    }
+    localStorage.setItem('alphaace_admin_theme', themeMode);
+    localStorage.setItem('admin_theme_mode', themeMode);
+  }, [themeMode]);
+
+  const toggleTheme = () => {
+    setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const fetchTelemetry = useCallback(async () => {
+    try {
+      const state = await fetchGameStateDirect();
+      if (state) {
+        setTelemetry({
+          status: 'HEALTHY',
+          supabase: { status: 'CONNECTED', connected: true },
+          round: state.currentRound || 1,
+          phase: state.phase || 'PRE_ROUND'
+        });
+      }
+    } catch {
+      // background telemetry non-blocking
+    }
+  }, []);
+
+  const fetchPasskeys = useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_passkey') || '';
+      if (!token) return;
+      const list = await managePasskeyDirect(token, 'LIST');
+      if (Array.isArray(list)) {
+        setAdminPasskeys(list);
+      }
+    } catch {
+      // Keep existing passkeys list if query fails
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchTelemetry();
+      fetchPasskeys();
+      const interval = setInterval(() => {
+        if (!document.hidden) {
+          fetchTelemetry();
+        }
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, fetchTelemetry, fetchPasskeys]);
+
+  // Robust Sign-In Handler (100% Supabase Native)
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    const key = (passkey || '').trim();
+    if (!key) {
+      setLoginError('Passkey is required.');
+      return;
+    }
+
+    setLoginLoading(true);
+    setLoginError('');
+
+    try {
+      const authData = await authAdminDirect(key);
+      if (authData && authData.authenticated) {
+        const token = key.trim();
+        sessionStorage.setItem('alphaace_admin_token', token);
+        sessionStorage.setItem('alphaace_admin_passkey', token);
+        localStorage.setItem('alphaace_admin_passkey', token);
+        setPasskey(''); // Security: clear passkey from memory/input
+        setIsAuthenticated(true);
+        setLoginError('');
+      } else {
+        setLoginError('Invalid administrator credentials. Access denied.');
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Authentication failed. Please verify admin passkey.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // Robust Sign-Out Handler
+  const handleLogout = () => {
+    sessionStorage.clear();
+    try { localStorage.clear(); } catch {}
+    setPasskey('');
+    setIsAuthenticated(false);
+    setShowCredModal(false);
+  };
+
+  // Create New Admin Credential (Stored directly in Supabase Cloud Vault)
+  const handleCreatePasskey = async (e) => {
+    e.preventDefault();
+    const cleanKey = newKeyInput.trim();
+    if (!cleanKey) {
+      setCredMsg({ text: 'Passkey cannot be empty.', type: 'error' });
+      return;
+    }
+
+    setCredLoading(true);
+    setCredMsg({ text: '', type: '' });
+
+    try {
+      const token = sessionStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_passkey') || '';
+      if (!token) throw new Error('No active admin session found. Please log in.');
+      const updatedList = await managePasskeyDirect(token, 'CREATE', cleanKey, newLabelInput.trim() || 'ADMIN');
+      if (Array.isArray(updatedList)) {
+        setAdminPasskeys(updatedList);
+      }
+      setCredMsg({
+        text: `Credential created: "${cleanKey}" (Encrypted in Cloud Vault)`,
+        type: 'success'
+      });
+      setNewKeyInput('');
+      setNewLabelInput('');
+      fetchPasskeys();
+    } catch (err) {
+      setCredMsg({ text: err.message || 'Error creating credential in Cloud Vault.', type: 'error' });
+    } finally {
+      setCredLoading(false);
+    }
+  };
+
+  // Delete Admin Credential from Cloud Storage
+  const handleDeletePasskey = async (targetKey) => {
+    setCredMsg({ text: 'Revoking credential from Cloud Vault...', type: 'info' });
+
+    try {
+      const token = sessionStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_passkey') || '';
+      if (!token) throw new Error('No active admin session found. Please log in.');
+      const updatedList = await managePasskeyDirect(token, 'DELETE', targetKey);
+      if (Array.isArray(updatedList)) {
+        setAdminPasskeys(updatedList);
+      }
+      setCredMsg({ text: 'Credential revoked from Cloud Vault.', type: 'success' });
+      fetchPasskeys();
+    } catch (err) {
+      setCredMsg({ text: err.message || 'Failed to revoke credential.', type: 'error' });
+      fetchPasskeys();
+    }
+  };
+
+  // Random Passkey Generator Helper
+  const generateRandomKey = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let res = 'adm_';
+    for (let i = 0; i < 6; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewKeyInput(res);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(text);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  // Dedicated Admin Authentication Gate
+  if (!isAuthenticated) {
+    return (
+      <div className="admin-executive-hub min-h-screen flex items-center justify-center p-6" data-theme={themeMode}>
+        <style>{STYLES}</style>
+        <div className="admin-card max-w-sm w-full p-8 relative">
+          <div className="absolute top-4 right-4">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="admin-btn admin-btn-secondary text-xs h-8 px-2.5"
+              title={`Switch to ${themeMode === 'dark' ? 'White Theme' : 'Dark Theme'}`}
+            >
+              {themeMode === 'dark' ? <Sun className="w-3.5 h-3.5 text-[#EAB308]" /> : <Moon className="w-3.5 h-3.5 text-[#8D5B3A]" />}
+            </button>
+          </div>
+
+          <div className="text-center mb-6">
+            <div
+              className="w-12 h-12 mx-auto mb-4 rounded-lg flex items-center justify-center"
+              style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+            >
+              <Shield className="w-6 h-6" style={{ color: 'var(--brown-primary)' }} />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+              Master Admin Gateway
+            </h1>
+            <p className="text-xs mt-1" style={{ color: 'var(--ink-gray)' }}>
+              Authorized tournament directors only
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="mb-4 p-2.5 rounded-lg bg-[#FEF2F2] border border-[#FCA5A5] text-[#991B1B] dark:bg-red-950/40 dark:border-red-800/60 dark:text-red-300 text-xs font-medium flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-[#DC2626] dark:text-red-400 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-mono font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--ink-gray)' }}>
+                Admin Passkey
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  value={passkey}
+                  onChange={(e) => setPasskey(e.target.value)}
+                  placeholder="Enter administrator passkey"
+                  className="admin-input font-mono w-full pl-9"
+                  disabled={loginLoading}
+                  autoComplete="off"
+                  autoFocus
+                />
+                <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--ink-muted)' }} />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="admin-btn admin-btn-brown w-full h-10 text-xs font-semibold"
+              disabled={loginLoading}
+            >
+              {loginLoading ? (
+                <>
+                  <Activity className="w-4 h-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <Unlock className="w-4 h-4" />
+                  Unlock Console
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const supabaseConnected = telemetry?.supabase?.status === 'CONNECTED' || telemetry?.supabase?.connected;
+
+  return (
+    <div className="admin-executive-hub min-h-screen p-6 sm:p-10" data-theme={themeMode}>
+      <style>{STYLES}</style>
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* Concise Header */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-3.5">
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center p-2 shrink-0"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+            >
+              <img src={aesLogo} alt="AES 2026" className="max-h-full max-w-full object-contain" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+                  AES Master Admin
+                </h1>
+                <span
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase"
+                  style={{ background: 'var(--card-inset)', border: '1px solid var(--tag-border)', color: 'var(--brown-primary)' }}
+                >
+                  Admin Only
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Create / Manage Credentials Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowCredModal(true);
+                fetchPasskeys();
+              }}
+              className="admin-btn admin-btn-secondary text-xs h-8 px-3"
+              title="Create & Manage Administrator Credentials"
+            >
+              <KeyRound className="w-3.5 h-3.5" style={{ color: 'var(--brown-primary)' }} />
+              <span>Admin Credentials</span>
+            </button>
+
+            {/* Cloud Database Pill */}
+            <div className="admin-pill">
+              <Database className={`w-3.5 h-3.5 ${supabaseConnected ? 'text-[#16A34A]' : 'text-[#DC2626]'}`} />
+              <span className="text-[11px]">
+                DB: <strong className={supabaseConnected ? 'text-[#16A34A]' : 'text-[#DC2626]'}>{supabaseConnected ? 'ONLINE' : 'OFFLINE'}</strong>
+              </span>
+            </div>
+
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="admin-btn admin-btn-secondary text-xs h-8 px-2.5"
+              title={`Switch to ${themeMode === 'dark' ? 'White Theme' : 'Dark Theme'}`}
+            >
+              {themeMode === 'dark' ? <Sun className="w-3.5 h-3.5 text-[#EAB308]" /> : <Moon className="w-3.5 h-3.5 text-[#8D5B3A]" />}
+            </button>
+
+            {/* Sign Out Button */}
+            <button
+              onClick={handleLogout}
+              className="admin-btn admin-btn-secondary text-xs h-8 px-3"
+              title="End Administrator Session"
+            >
+              <LogOut className="w-3.5 h-3.5" style={{ color: 'var(--ink-gray)' }} />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Modules Selection Deck */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold uppercase font-mono tracking-wider" style={{ color: 'var(--ink-muted)' }}>
+              Tournament Modules
+            </h2>
+            <span className="text-xs font-mono" style={{ color: 'var(--ink-muted)' }}>
+              2 Active · 1 Standby
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* Module 1: Investomania Admin */}
+            <div
+              className="admin-card flex flex-col justify-between"
+              style={{ borderTop: '3px solid var(--brown-primary)' }}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center p-1.5"
+                    style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+                  >
+                    <img src={investomaniaLogo} alt="Investomania" className="max-h-full max-w-full object-contain" />
+                  </div>
+                  <span
+                    className="admin-pill text-[#16A34A]"
+                    style={{ background: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.35)' }}
+                  >
+                    <Activity className="w-3 h-3 text-[#16A34A]" />
+                    ACTIVE · PORT 4000
+                  </span>
+                </div>
+
+                <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--brown-primary)' }}>
+                  Module 01
+                </div>
+                <h3 className="text-lg font-bold mb-1 tracking-tight" style={{ color: 'var(--ink-white)' }}>
+                  Investomania Admin
+                </h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--ink-gray)' }}>
+                  Financial simulation engine, PSX stocks, commodities, FX rates & offshore tax havens.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Equities</div>
+                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-white)' }}>20 Stocks</div>
+                  </div>
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Sync</div>
+                    <div className="text-xs font-mono font-bold text-[#16A34A] mt-0.5">Live Sockets</div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/investomania')}
+                className="admin-btn admin-btn-brown w-full justify-center text-xs"
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                Launch Investomania Admin
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </button>
+            </div>
+
+            {/* Module 2: Defend the Empire Admin */}
+            <div
+              className="admin-card flex flex-col justify-between"
+              style={{ borderTop: '3px solid var(--brown-primary)' }}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-xs"
+                    style={{ background: 'var(--card-inset)', border: '1px solid var(--border)', color: 'var(--brown-primary)' }}
+                  >
+                    DTE
+                  </div>
+                  <span
+                    className="admin-pill text-[#EAB308]"
+                    style={{ background: 'rgba(234, 179, 8, 0.12)', borderColor: 'rgba(234, 179, 8, 0.35)' }}
+                  >
+                    <Clock className="w-3 h-3 text-[#EAB308]" />
+                    WAR ROOM LIVE
+                  </span>
+                </div>
+
+                <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--brown-primary)' }}>
+                  Module 02
+                </div>
+                <h3 className="text-lg font-bold mb-1 tracking-tight" style={{ color: 'var(--ink-white)' }}>
+                  Defend the Empire Admin
+                </h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--ink-gray)' }}>
+                  Geopolitical crisis war room, synchronized round clocks, option lockout & team valuations.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Crises</div>
+                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-white)' }}>4 Waves</div>
+                  </div>
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Clocks</div>
+                    <div className="text-xs font-mono font-bold text-[#EAB308] mt-0.5">Synced</div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/defend')}
+                className="admin-btn admin-btn-brown w-full justify-center text-xs"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                Launch War Room Admin
+                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+              </button>
+            </div>
+
+            {/* Module 3: Market Monopoly (Standby) */}
+            <div
+              className="admin-card flex flex-col justify-between opacity-75"
+              style={{ borderTop: '3px solid var(--border)' }}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center font-mono font-bold text-xs"
+                    style={{ background: 'var(--card-inset)', border: '1px solid var(--border)', color: 'var(--ink-muted)' }}
+                  >
+                    MNP
+                  </div>
+                  <span className="admin-pill">
+                    STANDBY
+                  </span>
+                </div>
+
+                <div className="text-[10px] font-mono font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--ink-muted)' }}>
+                  Module 03
+                </div>
+                <h3 className="text-lg font-bold mb-1 tracking-tight" style={{ color: 'var(--ink-white)' }}>
+                  Market Monopoly
+                </h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--ink-gray)' }}>
+                  Asset acquisition, cartel bidding wars & liquidity arena. Ready for module drop-in.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Status</div>
+                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-gray)' }}>Standby</div>
+                  </div>
+                  <div className="p-2 rounded-lg text-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Route</div>
+                    <div className="text-xs font-mono font-bold mt-0.5" style={{ color: 'var(--ink-gray)' }}>/monopoly</div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/monopoly')}
+                className="admin-btn admin-btn-secondary w-full justify-center text-xs"
+              >
+                <Layers className="w-3.5 h-3.5" style={{ color: 'var(--ink-muted)' }} />
+                Open Standby Console
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Clean 1-Line Telemetry Footer */}
+        <div
+          className="admin-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono"
+          style={{ border: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center gap-4 flex-wrap">
+            <span style={{ color: 'var(--ink-gray)' }}>
+              ENGINE: <strong className="text-[#16A34A]">{telemetry?.investomaniaEngine || 'ONLINE'}</strong>
+            </span>
+            <span style={{ color: 'var(--ink-gray)' }}>
+              TEAMS: <strong style={{ color: 'var(--ink-white)' }}>{telemetry?.supabase?.registeredTeams || 0}</strong>
+            </span>
+          </div>
+
+          <div style={{ color: 'var(--ink-muted)' }}>
+            AES 2026 Admin Architecture · Ports 4000/4001
+          </div>
+        </div>
+
+      </div>
+
+      {/* Admin Credentials Management Modal */}
+      {showCredModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'var(--modal-overlay)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowCredModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl p-6 space-y-6"
+            style={{ background: 'var(--modal-bg)', border: '1px solid var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+                >
+                  <KeyRound className="w-4 h-4" style={{ color: 'var(--brown-primary)' }} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: 'var(--ink-white)' }}>
+                    Admin Credentials
+                  </h3>
+                  <p className="text-xs" style={{ color: 'var(--ink-gray)' }}>
+                    Generate, assign, and revoke administrator passkeys
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCredModal(false)}
+                className="p-1.5 rounded-lg hover:opacity-75"
+                style={{ color: 'var(--ink-muted)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Creation Form */}
+            <form onSubmit={handleCreatePasskey} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-mono font-semibold uppercase mb-1" style={{ color: 'var(--ink-gray)' }}>
+                    New Passkey
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newKeyInput}
+                      onChange={(e) => setNewKeyInput(e.target.value)}
+                      placeholder="e.g. adm_judge9"
+                      className="admin-input font-mono w-full text-xs"
+                      disabled={credLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={generateRandomKey}
+                      className="admin-btn admin-btn-secondary text-xs px-2.5 shrink-0"
+                      title="Generate random secure passkey"
+                    >
+                      Gen
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono font-semibold uppercase mb-1" style={{ color: 'var(--ink-gray)' }}>
+                    Role / Label
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabelInput}
+                    onChange={(e) => setNewLabelInput(e.target.value)}
+                    placeholder="e.g. Lead Arbitrator"
+                    className="admin-input text-xs w-full"
+                    disabled={credLoading}
+                  />
+                </div>
+              </div>
+
+              {credMsg.text && (
+                <div
+                  className={`p-2 rounded-lg text-xs font-medium ${
+                    credMsg.type === 'error'
+                      ? 'bg-[#FEF2F2] border border-[#FCA5A5] text-[#991B1B] dark:bg-red-950/30 dark:border-red-800/50 dark:text-red-300'
+                      : 'bg-[#ECFDF3] border border-[#A6F4C5] text-[#027A48] dark:bg-green-950/30 dark:border-green-800/50 dark:text-green-300'
+                  }`}
+                >
+                  {credMsg.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="admin-btn admin-btn-brown w-full h-9 text-xs"
+                disabled={credLoading}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {credLoading ? 'Creating...' : 'Create Admin Credential'}
+              </button>
+            </form>
+
+            {/* Active Credentials List */}
+            <div className="space-y-2 pt-2">
+              <div className="text-[11px] font-mono uppercase font-semibold" style={{ color: 'var(--ink-muted)' }}>
+                Active Credentials ({adminPasskeys.length})
+              </div>
+
+              <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                {adminPasskeys.map((p, idx) => {
+                  const keyVal = p.keyMask || p.key || (typeof p === 'string' ? p : 'adm••••key');
+                  const deleteTarget = p.id || p.key || p.keyMask || (typeof p === 'string' ? p : '');
+                  const labelVal = p.label || 'Admin Key';
+                  const isLastKey = adminPasskeys.length <= 1;
+
+                  return (
+                    <div
+                      key={p.id || idx}
+                      className="p-3 rounded-lg flex items-center justify-between gap-3 text-xs"
+                      style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono font-bold flex items-center gap-2" style={{ color: 'var(--ink-white)' }}>
+                          <span>{keyVal}</span>
+                          {copiedKey === keyVal ? (
+                            <Check className="w-3 h-3 text-[#16A34A]" />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(keyVal)}
+                              className="text-[10px] hover:opacity-75"
+                              style={{ color: 'var(--ink-muted)' }}
+                              title="Copy passkey"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[11px] truncate mt-0.5" style={{ color: 'var(--ink-gray)' }}>
+                          {labelVal}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePasskey(deleteTarget)}
+                          className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-[#DC2626] dark:text-red-400 border border-transparent hover:border-red-300 dark:hover:border-red-900 transition-colors"
+                          title="Revoke Credential"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvestomaniaAdminRoute() {
+  const navigate = useNavigate();
+
+  return (
+    <GameProvider>
+      <div className="w-full min-h-screen">
+        <Suspense fallback={<AdminModuleFallback title="Connecting to Investomania Engine..." />}>
+          <AdminPanel onBackToHub={() => navigate('/')} />
+        </Suspense>
+      </div>
+    </GameProvider>
+  );
+}
+
+function PlaceholderModuleView({ name }) {
+  const navigate = useNavigate();
+  return (
+    <div className="admin-executive-hub min-h-screen flex items-center justify-center p-8">
+      <style>{STYLES}</style>
+      <div className="admin-card max-w-sm w-full text-center p-8">
+        <div
+          className="w-10 h-10 mx-auto mb-3 rounded-lg flex items-center justify-center"
+          style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+        >
+          <Layers className="w-5 h-5" style={{ color: 'var(--brown-primary)' }} />
+        </div>
+        <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--ink-white)' }}>
+          {name} Admin Console
+        </h2>
+        <p className="text-xs mb-5" style={{ color: 'var(--ink-gray)' }}>
+          This tournament module is provisioned and ready for drop-in.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="admin-btn admin-btn-brown w-full justify-center text-xs"
+        >
+          Return to Master Admin Hub
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DefendAdminRoute() {
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<AdminModuleFallback title="Connecting to War Room Command..." />}>
+      <AdminDashboardShell onBackToHub={() => navigate('/')} />
+    </Suspense>
+  );
+}
+
+export default function App() {
+  // Passkey always starts empty so credentials are never pre-filled or visible
+  const [passkey, setPasskey] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!(localStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_token'));
+  });
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <MasterHub
+              isAuthenticated={isAuthenticated}
+              setIsAuthenticated={setIsAuthenticated}
+              passkey={passkey}
+              setPasskey={setPasskey}
+            />
+          }
+        />
+        <Route path="/investomania/*" element={<InvestomaniaAdminRoute />} />
+        <Route path="/defend/*" element={<DefendAdminRoute />} />
+        <Route path="/defend" element={<DefendAdminRoute />} />
+        <Route path="/monopoly" element={<PlaceholderModuleView name="Market Monopoly" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
