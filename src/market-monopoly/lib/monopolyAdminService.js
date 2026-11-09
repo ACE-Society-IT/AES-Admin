@@ -366,6 +366,19 @@ export async function assignMultiplePropertiesToTeam({
   resourceIds = [],
   teamId
 }) {
+  if (supabase) {
+    const propIdList = (Array.isArray(propertyIds) ? propertyIds : []).map(Number);
+    const resIdList = (Array.isArray(resourceIds) ? resourceIds : []).map(Number);
+    const { data: res, error } = await supabase.rpc('monopoly_assign_multiple_properties', {
+      p_team_id: String(teamId),
+      p_property_ids: propIdList,
+      p_utility_ids: resIdList
+    });
+    if (error) throw error;
+    if (res && !res.ok) throw new Error(res.error || 'Server rejected batch assignment.');
+    return await fetchMonopolyStore(true);
+  }
+
   const latest = await fetchMonopolyStore();
   const team = latest.teams.find((t) => String(t.id) === String(teamId));
   if (!team) throw new Error('Select a team first.');
@@ -572,6 +585,20 @@ export async function updatePropertySettingsAdmin({
     Math.round(nextUpgradeCost),
     Math.round(nextUpgradeCost)
   ];
+
+  if (supabase) {
+    const { data: res, error } = await supabase.rpc('monopoly_update_property_settings', {
+      p_property_id: Number(propertyId),
+      p_name: prop.name,
+      p_opening_value: nextPrice,
+      p_rent_values: nextRentValues,
+      p_upgrade_costs: nextUpgradeCosts,
+      p_upgrade_level: nextLvl
+    });
+    if (error) throw error;
+    if (res && !res.ok) throw new Error(res.error || 'Server rejected property update.');
+    return await fetchMonopolyStore(true);
+  }
 
   const nextProps = latest.properties.map((p) =>
     Number(p.id) === Number(prop.id)
