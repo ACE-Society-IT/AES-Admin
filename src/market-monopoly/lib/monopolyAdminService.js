@@ -1239,19 +1239,27 @@ export async function triggerWheelSpinAdmin({ teamId }) {
 
     // Compute Rent
     const rentAmount = computePropertyRent(landedProp);
-    const isOwnedBySpinner = landedProp.ownerTeamId && String(landedProp.ownerTeamId) === String(team.id);
+    const isOwnedBySpinner = Boolean(
+      (landedProp.ownerTeamId && String(landedProp.ownerTeamId).trim().toLowerCase() === String(team.id).trim().toLowerCase()) ||
+      (landedProp.ownerTeamName && team.name && String(landedProp.ownerTeamName).trim().toLowerCase() === String(team.name).trim().toLowerCase())
+    );
     const isUnowned = !landedProp.ownerTeamId;
     const ownerTeam = !isUnowned && !isOwnedBySpinner
-      ? nextTeams.find((t) => String(t.id) === String(landedProp.ownerTeamId))
+      ? nextTeams.find((t) => 
+          (landedProp.ownerTeamId && String(t.id).trim().toLowerCase() === String(landedProp.ownerTeamId).trim().toLowerCase()) ||
+          (landedProp.ownerTeamName && t.name && String(t.name).trim().toLowerCase() === String(landedProp.ownerTeamName).trim().toLowerCase())
+        )
       : null;
 
     let spinStatus = 'UNOWNED';
     let payerCashDelta = 0;
     let ownerCashDelta = 0;
 
-    if (isOwnedBySpinner) {
+    if (isOwnedBySpinner || (ownerTeam && String(ownerTeam.id) === String(team.id))) {
       spinStatus = 'OWN_PROPERTY';
-    } else if (ownerTeam) {
+      payerCashDelta = 0;
+      ownerCashDelta = 0;
+    } else if (ownerTeam && String(ownerTeam.id) !== String(team.id)) {
       spinStatus = 'PAID_RENT';
       payerCashDelta = -rentAmount;
       ownerCashDelta = rentAmount;
