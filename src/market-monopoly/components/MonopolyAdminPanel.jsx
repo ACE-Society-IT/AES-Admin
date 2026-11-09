@@ -20,6 +20,7 @@ import {
   addNewTeamAdmin,
   deleteTeamAdmin,
   resetMonopolyGameAdmin,
+  toggleShowRankingsAdmin,
   getInitialStore,
   computeTeamSummary
 } from '../lib/monopolyAdminService.js';
@@ -510,6 +511,16 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
     }
   };
 
+  const handleToggleShowRankings = async () => {
+    try {
+      const updated = await toggleShowRankingsAdmin({ store });
+      setStore(updated);
+      notify(updated.showRankings ? 'Rankings are now VISIBLE to participants.' : 'Rankings are now HIDDEN from participants.');
+    } catch (err) {
+      notify(err.message, 'err');
+    }
+  };
+
   // Release Next Spin Wave
   const handleReleaseNextWheelSpin = async () => {
     try {
@@ -619,6 +630,19 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
               }`}
             >
               Round 2 (Utilities & Wheel)
+            </button>
+
+                        {/* Rankings Visibility Toggle */}
+            <button
+              type="button"
+              onClick={handleToggleShowRankings}
+              className={`editorial-btn text-xs py-2 px-3 font-semibold transition-all ${
+                store.showRankings
+                  ? 'editorial-btn-dark ring-2 ring-[#027A48]'
+                  : 'editorial-btn-outline text-[#B42318] border-[#B42318]/40'
+              }`}
+            >
+              {store.showRankings ? 'Rankings: Visible' : 'Rankings: Hidden'}
             </button>
 
             <button

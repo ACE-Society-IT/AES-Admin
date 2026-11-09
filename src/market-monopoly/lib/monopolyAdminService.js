@@ -11,6 +11,7 @@ import {
 export function getInitialStore() {
   return {
     currentRound: 1,
+    showRankings: false,
     activeAuctionPropertyId: 1,
     currentWheelRound: 1,
     wheelSpinsByRound: {},
@@ -104,6 +105,7 @@ export function hydrateMonopolyState(rawState) {
 
   return {
     currentRound: Number(rawState.currentRound || 1),
+    showRankings: rawState.showRankings === true,
     activeAuctionPropertyId: Number(rawState.activeAuctionPropertyId || 1),
     currentWheelRound: Number(rawState.currentWheelRound || 1),
     wheelSpinsByRound:
@@ -1040,4 +1042,14 @@ export function computeTeamSummary(team, properties = []) {
     netWorth,
     ownedProperties: owned
   };
+}
+
+
+export async function toggleShowRankingsAdmin({ store, showRankings }) {
+  const nextVal = typeof showRankings === 'boolean' ? showRankings : !store.showRankings;
+  return persistMonopolyStore({
+    ...store,
+    showRankings: nextVal,
+    updatedAt: Date.now()
+  });
 }
