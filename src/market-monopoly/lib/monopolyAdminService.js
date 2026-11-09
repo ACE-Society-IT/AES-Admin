@@ -1186,6 +1186,24 @@ export async function toggleShowRankingsAdmin({ store, showRankings }) {
  */
 export async function triggerWheelSpinAdmin({ teamId }) {
   if (supabase) {
+    if (teamId === 'ALL' || teamId === 'ALL_UNSPUN') {
+      const latest = await fetchMonopolyStore(true);
+      const currentWave = Number(latest.currentWheelRound || 1);
+      const teamsToSpin = teamId === 'ALL'
+        ? latest.teams
+        : latest.teams.filter((t) => !(latest.wheelSpinsByRound?.[currentWave] || {})[t.id]);
+
+      if (teamsToSpin.length === 0) throw new Error("No eligible teams found to spin.");
+
+      for (const t of teamsToSpin) {
+        await supabase.rpc('monopoly_execute_wheel_spin', {
+          p_team_id: String(t.id),
+          p_property_id: 0
+        });
+      }
+      return await fetchMonopolyStore(true);
+    }
+
     const { data: res, error } = await supabase.rpc('monopoly_execute_wheel_spin', {
       p_team_id: String(teamId),
       p_property_id: 0
