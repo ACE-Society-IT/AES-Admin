@@ -164,7 +164,7 @@ export async function fetchMonopolyStore(forceFresh = false) {
       const [stateRes, teamsRes, propsRes] = await Promise.all([
         supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
         supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true }),
-        supabase.from('monopoly_properties').select('*').order('id', { ascending: true })
+        supabase.from('monopoly_properties').select('id, owner_team_id, owner_team_name, purchase_price, upgrade_level, attached_utilities, opening_value, level3_target').order('id', { ascending: true })
       ]);
 
       if (stateRes.error) {
