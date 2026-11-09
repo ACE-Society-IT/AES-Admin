@@ -42,16 +42,18 @@ const PROP_SLICE_PALETTE = [
 ];
 
 const TEAM_SLICE_PALETTE = [
-  { bg: '#8B1E32', text: '#FFF8F6', accent: '#ECC37A' }, // Crimson
-  { bg: '#1E3A8A', text: '#EFF6FF', accent: '#93C5FD' }, // Sapphire Blue
-  { bg: '#14532D', text: '#F0FDF4', accent: '#86EFAC' }, // Emerald Green
-  { bg: '#78350F', text: '#FFFBEB', accent: '#FDE047' }, // Amber Gold
-  { bg: '#581C87', text: '#FAF5FF', accent: '#D8B4FE' }, // Royal Purple
-  { bg: '#0F766E', text: '#F0FDFA', accent: '#5EEAD4' }, // Teal
-  { bg: '#9A3412', text: '#FFF7ED', accent: '#FDBA74' }, // Burnt Orange
-  { bg: '#831843', text: '#FDF2F8', accent: '#F472B6' }, // Rose Pink
-  { bg: '#312E81', text: '#EEF2FF', accent: '#A5B4FC' }, // Indigo
-  { bg: '#365314', text: '#F7FEE7', accent: '#BEF264' }  // Lime Green
+  { bg: '#701020', text: '#F8EEE1', accent: '#F1CA7E' }, // AES Crimson
+  { bg: '#2A1215', text: '#F1CA7E', accent: '#FFF8F6' }, // Dark Mahogany
+  { bg: '#8D5B3A', text: '#FFF8F6', accent: '#F1CA7E' }, // Brand Terracotta
+  { bg: '#47131C', text: '#E8DCC6', accent: '#ECC37A' }, // Deep Espresso
+  { bg: '#8B1E32', text: '#FFF8F6', accent: '#ECC37A' }, // Rich Ruby
+  { bg: '#1C050B', text: '#F1CA7E', accent: '#FFF8F6' }, // Obsidian Black-Red
+  { bg: '#5E1B21', text: '#F8EEE1', accent: '#F1CA7E' }, // Imperial Burgundy
+  { bg: '#3B1D11', text: '#FFF8F6', accent: '#ECC37A' }, // Warm Cocoa
+  { bg: '#9E2A2B', text: '#FFF8F6', accent: '#F1CA7E' }, // Vivid Terracotta
+  { bg: '#581420', text: '#F1CA7E', accent: '#FFF8F6' }, // Royal Bordeaux
+  { bg: '#78281F', text: '#F8EEE1', accent: '#ECC37A' }, // Brick Red
+  { bg: '#330810', text: '#ECC37A', accent: '#FFF8F6' }  // Dark Velvet
 ];
 
 function polarToCartesian(cx, cy, r, angleInDegrees) {
@@ -406,7 +408,7 @@ export default function AdminSpinWheelModal({
                     }}
                   >
                     <circle cx="200" cy="200" r="196" fill="#140207" stroke="#ECC37A" strokeWidth="6" />
-                    <circle cx="200" cy="200" r="189" fill="none" stroke="#2A0812" strokeWidth="4" />
+                    <circle cx="200" cy="200" r="189" fill="none" stroke="#701020" strokeWidth="4" />
 
                     {totalTeamSlices === 1 ? (
                       <circle cx="200" cy="200" r="185" fill={TEAM_SLICE_PALETTE[0].bg} />
@@ -418,6 +420,7 @@ export default function AdminSpinWheelModal({
                         const palette = TEAM_SLICE_PALETTE[idx % TEAM_SLICE_PALETTE.length];
                         const midAngle = startAngle + teamSliceAngle / 2;
                         const textCoord = polarToCartesian(200, 200, 126, midAngle);
+                        const dotCoord = polarToCartesian(200, 200, 180, midAngle);
 
                         return (
                           <g key={t.id}>
@@ -425,8 +428,16 @@ export default function AdminSpinWheelModal({
                               d={path}
                               fill={palette.bg}
                               stroke="#ECC37A"
-                              strokeWidth="1.2"
-                              strokeOpacity="0.6"
+                              strokeWidth="0.8"
+                              strokeOpacity="0.5"
+                            />
+                            <circle
+                              cx={dotCoord.x}
+                              cy={dotCoord.y}
+                              r="2.5"
+                              fill="#ECC37A"
+                              stroke="#701020"
+                              strokeWidth="0.5"
                             />
                             <g transform={`translate(${textCoord.x}, ${textCoord.y}) rotate(${midAngle + 90})`}>
                               <text
@@ -456,26 +467,26 @@ export default function AdminSpinWheelModal({
                       })
                     )}
 
-                    {/* Center Hub */}
+                    {/* Center Hub (Matches Wheel 1 Luxury Editorial Theme) */}
                     <circle cx="200" cy="200" r="40" fill="#1C050B" stroke="#ECC37A" strokeWidth="3" />
-                    <circle cx="200" cy="200" r="32" fill="#1E3A8A" stroke="#FFF2CC" strokeWidth="1.5" />
+                    <circle cx="200" cy="200" r="32" fill="#701020" stroke="#FFF2CC" strokeWidth="1.5" />
                     <text
                       x="200"
                       y="196"
                       textAnchor="middle"
-                      fill="#93C5FD"
+                      fill="#F1CA7E"
                       fontSize="8"
                       fontWeight="900"
                       fontFamily="monospace"
                       letterSpacing="1px"
                     >
-                      PAYER
+                      AES
                     </text>
                     <text
                       x="200"
                       y="207"
                       textAnchor="middle"
-                      fill="#FFF"
+                      fill="#FFF8F6"
                       fontSize="7"
                       fontWeight="700"
                     >
