@@ -1749,7 +1749,7 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                       onClick={() => triggerWheelSpinAdmin({ teamId: 'ALL_UNSPUN' }).then((up) => { setStore(up); notify('Spun wheel for all remaining teams!'); })}
                       className="editorial-btn editorial-btn-green py-2.5 px-4 text-xs font-bold disabled:opacity-40"
                     >
-                      {isSpinningWheelAdmin ? 'Spinning...' : `⚡ Spin All Remaining (${unspunTeams.length})`}
+                      {isSpinningWheelAdmin ? 'Spinning...' : `Spin All Remaining (${unspunTeams.length})`}
                     </button>
 
                     <button
@@ -1811,20 +1811,20 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                             'Spinning...'
                           ) : (
                             <>
-                              ⚡ Spin Wheel for {unspunTeams.find(t => String(t.id) === String(selectedSpinTeamId))?.name || 'Selected Team'}
+                              Spin Wheel for {unspunTeams.find(t => String(t.id) === String(selectedSpinTeamId))?.name || 'Selected Team'}
                             </>
                           )}
                         </button>
                       </div>
 
                       <p className="text-[11px] font-mono text-[#F1CA7E]/70">
-                        ℹ️ Once spun, this team is removed from the selection and broadcast to the classroom projector. Use &quot;Delete Spin&quot; below if you need to undo or re-queue.
+                        Notice: Once spun, this team is removed from the selection and broadcast to the classroom projector. Use &quot;Delete Spin&quot; below if you need to undo or re-queue.
                       </p>
                     </div>
                   ) : (
                     <div className="py-4 text-center space-y-2">
                       <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#0E2E1D] border border-[#22C55E]/50 text-[#86EFAC] text-xs font-mono font-bold">
-                        <span>✓</span> All {store.teams.length} teams have spun for Wave #{currentWheelRound}!
+                        <span>[Completed]</span> All {store.teams.length} teams have spun for Wave #{currentWheelRound}!
                       </div>
                       <p className="text-xs text-[#F1CA7E]/80">
                         Ready for the next round? Click &quot;Advance to Wave #{currentWheelRound + 1}&quot; above, or delete any spin below if a correction is needed.
@@ -1906,7 +1906,7 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                                   className="flex-1 editorial-btn text-[10px] py-1 px-2 font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors"
                                   title="Delete this spin and refund any rent paid"
                                 >
-                                  🗑️ Delete Spin
+                                  Delete Spin
                                 </button>
                               </div>
                             </div>
@@ -1921,7 +1921,7 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                                 onClick={() => handleTriggerTeamSpin(team.id)}
                                 className="editorial-btn editorial-btn-outline text-[10px] py-1 px-2.5 font-bold hover:bg-[#701020] hover:text-white"
                               >
-                                ⚡ Spin Now
+                                Spin Now
                               </button>
                             </div>
                           )}
