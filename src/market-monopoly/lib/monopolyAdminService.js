@@ -152,11 +152,15 @@ export function updateCachedAdminMonopolyStore(rawState) {
 }
 
 export async function fetchMonopolyStore(forceFresh = false) {
-  if (!forceFresh && _adminCachedStore && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
-    return _adminCachedStore;
-  }
-  if (!forceFresh && _adminActivePromise) {
-    return _adminActivePromise;
+  if (forceFresh) {
+    invalidateAdminMonopolyCache();
+  } else {
+    if (_adminCachedStore && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
+      return _adminCachedStore;
+    }
+    if (_adminActivePromise) {
+      return _adminActivePromise;
+    }
   }
 
   const runFetch = async () => {
@@ -164,7 +168,7 @@ export async function fetchMonopolyStore(forceFresh = false) {
       const [stateRes, teamsRes, propsRes] = await Promise.all([
         supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
         supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true }),
-        supabase.from('monopoly_properties').select('id, owner_team_id, owner_team_name, purchase_price, upgrade_level, attached_utilities, opening_value, level3_target').order('id', { ascending: true })
+        supabase.from('monopoly_properties').select('id, owner_team_id, purchase_price, upgrade_level, attached_utilities, opening_value, level3_target').order('id', { ascending: true })
       ]);
 
       if (stateRes.error) {
@@ -1236,7 +1240,7 @@ export async function toggleShowRankingsAdmin({ store, showRankings }) {
   if (supabase) {
     const nextVal = typeof showRankings === 'boolean' ? showRankings : !store?.showRankings;
     const { data: res, error } = await supabase.rpc('monopoly_toggle_show_rankings', {
-      p_show: Boolean(nextVal),
+      p_show_rankings: Boolean(nextVal),
       p_passkey: getAdminPasskey()
     });
     if (error) throw error;

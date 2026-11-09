@@ -9,6 +9,7 @@ import {
 import {
   fetchMonopolyStore,
   updateCachedAdminMonopolyStore,
+  invalidateAdminMonopolyCache,
   persistMonopolyStore,
   recordAuctionWin,
   assignMultiplePropertiesToTeam,
@@ -27,6 +28,7 @@ import {
   getInitialStore,
   computeTeamSummary
 } from '../lib/monopolyAdminService.js';
+import AdminSpinWheelModal from './AdminSpinWheelModal.jsx';
 import aesLogo from '../../assets/aes-logo.png';
 
 function AdminPropertySvgBanner({ category = 'Residential', level = 0 }) {
@@ -212,6 +214,11 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
   useEffect(() => {
     refreshStore(true);
 
+    const handleDbChange = () => {
+      invalidateAdminMonopolyCache();
+      refreshStore(true);
+    };
+
     const sub = supabase
       .channel('monopoly_admin_updates')
       .on(
@@ -223,31 +230,32 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
             if (updated) {
               setStore(updated);
               setStoreError(null);
-              return;
             }
           }
-          refreshStore(true);
+          handleDbChange();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'monopoly_teams' },
-        () => {
-          refreshStore(true);
-        }
+        handleDbChange
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'monopoly_properties' },
-        () => {
-          refreshStore(true);
-        }
+        handleDbChange
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'monopoly_transactions' },
+        handleDbChange
       )
       .subscribe();
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        refreshStore(false);
+        invalidateAdminMonopolyCache();
+        refreshStore(true);
       }
     };
     window.addEventListener('focus', handleVisibility);
@@ -255,9 +263,9 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
 
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        refreshStore(false);
+        refreshStore(true);
       }
-    }, 20000);
+    }, 6000);
 
     return () => {
       supabase.removeChannel(sub);
@@ -577,18 +585,13 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     }
   }, [unspunTeams, selectedSpinTeamId]);
 
-  const handleTriggerTeamSpin = async (teamId) => {
+  const [adminWheelModalTeam, setAdminWheelModalTeam] = useState(null);
+
+  const handleTriggerTeamSpin = (teamId) => {
     if (!teamId) return;
-    try {
-      setIsSpinningWheelAdmin(true);
-      const updated = await triggerWheelSpinAdmin({ teamId });
-      setStore(updated);
-      const team = updated.teams.find(t => String(t.id) === String(teamId));
-      notify(`Wheel spun for ${team?.name || 'team'}! Outcome broadcast to screen.`);
-    } catch (err) {
-      notify(err.message, 'err');
-    } finally {
-      setIsSpinningWheelAdmin(false);
+    const target = (store?.teams || []).find((t) => String(t.id) === String(teamId));
+    if (target) {
+      setAdminWheelModalTeam(target);
     }
   };
 
@@ -1809,7 +1812,18 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                     <button
                       type="button"
                       disabled={isSpinningWheelAdmin || unspunTeams.length === 0}
-                      onClick={() => triggerWheelSpinAdmin({ teamId: 'ALL_UNSPUN' }).then((up) => { setStore(up); notify('Spun wheel for all remaining teams!'); })}
+                      onClick={async () => {
+                        try {
+                          setIsSpinningWheelAdmin(true);
+                          const up = await triggerWheelSpinAdmin({ teamId: 'ALL_UNSPUN' });
+                          setStore(up);
+                          notify('Spun wheel for all remaining teams!');
+                        } catch (err) {
+                          notify(err.message, 'err');
+                        } finally {
+                          setIsSpinningWheelAdmin(false);
+                        }
+                      }}
                       className="editorial-btn editorial-btn-green py-2.5 px-4 text-xs font-bold disabled:opacity-40"
                     >
                       {isSpinningWheelAdmin ? 'Spinning...' : `Spin All Remaining (${unspunTeams.length})`}
@@ -2215,6 +2229,16 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
           </div>
         </div>
       </div>
+
+      {adminWheelModalTeam && (
+        <AdminSpinWheelModal
+          isOpen={Boolean(adminWheelModalTeam)}
+          onClose={() => setAdminWheelModalTeam(null)}
+          store={store}
+          initialTeam={adminWheelModalTeam}
+          onStoreUpdated={(fresh) => setStore(fresh)}
+        />
+      )}
     </div>
   );
 }
