@@ -193,12 +193,18 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
     setTimeout(() => setFeedback(null), 3200);
   };
 
+  const [storeError, setStoreError] = useState(null);
+
   const refreshStore = useCallback(async (forceFresh = false) => {
     try {
       const loaded = await fetchMonopolyStore(forceFresh);
-      setStore(loaded);
+      if (loaded) {
+        setStore(loaded);
+        setStoreError(null);
+      }
     } catch (err) {
       console.error('Supabase refreshStore error:', err);
+      setStoreError(err.message || 'Unable to connect to tournament database');
     }
   }, []);
 
@@ -221,13 +227,20 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
           refreshStore(true);
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'monopoly_properties' },
+        () => {
+          refreshStore(true);
+        }
+      )
       .subscribe();
 
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshStore(false);
       }
-    }, 5000);
+    }, 4000);
 
     return () => {
       supabase.removeChannel(sub);
@@ -619,14 +632,34 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
   if (!store) {
     return (
       <div className="editorial-canvas w-full min-h-screen flex items-center justify-center p-6" data-admin-theme={themeMode}>
-        <div className="editorial-card p-6 text-center">
-          <p className="text-xs font-mono">Loading Market Monopoly Admin...</p>
+        <div className="editorial-card p-6 text-center max-w-sm w-full space-y-3.5 shadow-xl">
+          {storeError ? (
+            <div className="space-y-3">
+              <div className="w-10 h-10 mx-auto rounded-xl bg-[#FEF3F2] border border-[#FECDCA] flex items-center justify-center text-[#B42318] font-bold text-sm">
+                !
+              </div>
+              <p className="text-xs font-mono text-[#B42318] font-bold">Failed to load Market Monopoly store</p>
+              <p className="text-[11px] font-mono text-[#71717A] leading-relaxed">{storeError}</p>
+              <button
+                type="button"
+                onClick={() => refreshStore(true)}
+                className="editorial-btn editorial-btn-dark text-xs py-2 px-3 w-full justify-center"
+              >
+                Retry Connection
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="w-8 h-8 mx-auto border-2 border-[#8D5B3A] border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs font-mono text-[#71717A]">Loading Market Monopoly Admin...</p>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  const soldCount = store.properties.filter((p) => p.ownerTeamId).length;
+  const soldCount = (store.properties || []).filter((p) => p.ownerTeamId).length;
   const currentWheelRound = Number(store.currentWheelRound || 1);
 
   return (
@@ -760,11 +793,11 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
               {
                 id: 'resources',
                 label: 'Resources (Bid)',
-                badge: `${store.teams.reduce((sum, t) => sum + (t.ownedResources?.length || 0), 0)}`
+                badge: `${(store.teams || []).reduce((sum, t) => sum + (t.ownedResources?.length || 0), 0)}`
               },
-              { id: 'teams', label: 'Users & Teams', badge: store.teams.length },
+              { id: 'teams', label: 'Users & Teams', badge: (store.teams || []).length },
               { id: 'wheel', label: 'Spin Wheel', badge: `#${currentWheelRound}` },
-              { id: 'history', label: 'History', badge: store.transactions.length }
+              { id: 'history', label: 'History', badge: (store.transactions || []).length }
             ].map((tab) => {
               const active = activeTab === tab.id;
               return (

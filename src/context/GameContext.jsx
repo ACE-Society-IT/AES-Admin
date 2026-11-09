@@ -18,7 +18,13 @@ export function GameProvider({ children }) {
       return null;
     }
   });
-  const [adminPasscode, setAdminPasscode] = useState(() => sessionStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_passkey') || '');
+  const [adminPasscode, setAdminPasscode] = useState(() => 
+    sessionStorage.getItem('alphaace_admin_token') || 
+    localStorage.getItem('alphaace_admin_token') || 
+    sessionStorage.getItem('alphaace_admin_passkey') || 
+    localStorage.getItem('alphaace_admin_passkey') || 
+    ''
+  );
 
   // Support 3 modes: 'light' (Classic White), 'dark' (Classic Maroon Obsidian), 'aes' (AES Crimson Canvas + Crisp White Cards)
   const [theme, setTheme] = useState(() => sessionStorage.getItem('investomania_theme') || 'light');

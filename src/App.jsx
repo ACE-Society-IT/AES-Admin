@@ -301,6 +301,7 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
         const token = key.trim();
         sessionStorage.setItem('alphaace_admin_token', token);
         sessionStorage.setItem('alphaace_admin_passkey', token);
+        localStorage.setItem('alphaace_admin_token', token);
         localStorage.setItem('alphaace_admin_passkey', token);
         setPasskey(''); // Security: clear passkey from memory/input
         setIsAuthenticated(true);
@@ -998,35 +999,99 @@ function AdminPageTitleSync() {
   return null;
 }
 
+class AdminErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Admin Panel Crash Caught:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.href = '/';
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="admin-executive-hub min-h-screen flex items-center justify-center p-6 bg-[#0C0A09] text-[#F5EFEB]">
+          <div className="admin-card max-w-md w-full p-8 text-center space-y-4 border border-[#4D372B] bg-[#181513] rounded-2xl shadow-2xl">
+            <div className="w-12 h-12 mx-auto rounded-xl bg-[#2E0C16] border border-[#8B1428] flex items-center justify-center text-[#DC2626]">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold font-serif text-[#FFFFFF]">
+              Admin Panel Notice
+            </h2>
+            <p className="text-xs font-mono text-[#A8A29E] leading-relaxed">
+              {this.state.error?.message || 'A navigation or rendering glitch occurred while switching tabs.'}
+            </p>
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="admin-btn admin-btn-brown text-xs px-4 py-2"
+              >
+                Refresh View
+              </button>
+              <button
+                type="button"
+                onClick={this.handleReset}
+                className="admin-btn admin-btn-secondary text-xs px-4 py-2"
+              >
+                Return to Hub
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   // Passkey always starts empty so credentials are never pre-filled or visible
   const [passkey, setPasskey] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!(localStorage.getItem('alphaace_admin_token') || sessionStorage.getItem('alphaace_admin_token'));
+    return !!(
+      localStorage.getItem('alphaace_admin_token') ||
+      sessionStorage.getItem('alphaace_admin_token') ||
+      localStorage.getItem('alphaace_admin_passkey') ||
+      sessionStorage.getItem('alphaace_admin_passkey')
+    );
   });
 
   return (
-    <BrowserRouter>
-      <AdminPageTitleSync />
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <MasterHub
-              isAuthenticated={isAuthenticated}
-              setIsAuthenticated={setIsAuthenticated}
-              passkey={passkey}
-              setPasskey={setPasskey}
-            />
-          }
-        />
-        <Route path="/investomania/*" element={<InvestomaniaAdminRoute />} />
-        <Route path="/defend/*" element={<DefendAdminRoute />} />
-        <Route path="/defend" element={<DefendAdminRoute />} />
-        <Route path="/monopoly/*" element={<MonopolyAdminRoute />} />
-        <Route path="/monopoly" element={<MonopolyAdminRoute />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AdminErrorBoundary>
+      <BrowserRouter>
+        <AdminPageTitleSync />
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <MasterHub
+                isAuthenticated={isAuthenticated}
+                setIsAuthenticated={setIsAuthenticated}
+                passkey={passkey}
+                setPasskey={setPasskey}
+              />
+            }
+          />
+          <Route path="/investomania/*" element={<InvestomaniaAdminRoute />} />
+          <Route path="/defend/*" element={<DefendAdminRoute />} />
+          <Route path="/defend" element={<DefendAdminRoute />} />
+          <Route path="/monopoly/*" element={<MonopolyAdminRoute />} />
+          <Route path="/monopoly" element={<MonopolyAdminRoute />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AdminErrorBoundary>
   );
 }
