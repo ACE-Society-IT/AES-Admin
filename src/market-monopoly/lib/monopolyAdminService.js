@@ -24,6 +24,8 @@ export function getInitialStore() {
     activeAuctionPropertyId: 1,
     currentWheelRound: 1,
     wheelSpinsByRound: {},
+    wheelSpinsHistory: [],
+    wheelSpinsCount: 0,
     lastWheelResult: null,
     teams: [],
     properties: KARACHI_PROPERTIES.map((p) => ({
@@ -121,6 +123,8 @@ export function hydrateMonopolyState(rawState) {
       rawState.wheelSpinsByRound && typeof rawState.wheelSpinsByRound === 'object'
         ? rawState.wheelSpinsByRound
         : {},
+    wheelSpinsHistory: Array.isArray(rawState.wheelSpinsHistory) ? rawState.wheelSpinsHistory : [],
+    wheelSpinsCount: Number(rawState.wheelSpinsCount || (Array.isArray(rawState.wheelSpinsHistory) ? rawState.wheelSpinsHistory.length : 0)),
     lastWheelResult: rawState.lastWheelResult || null,
     teams,
     properties: mergedProps,
@@ -1504,5 +1508,46 @@ export async function deleteWheelSpinAdmin({ round, teamId }) {
     wheelSpinsByRound: nextWheelSpinsByRound,
     lastWheelResult: nextLastWheelResult,
     transactions: [tx, ...(latest.transactions || [])]
+  });
+}
+
+/**
+ * Admin: Reset all wheel spin history and counter
+ */
+export async function resetWheelSpinsAdmin() {
+  if (supabase) {
+    const { data, error } = await supabase.rpc('monopoly_reset_wheel_spins');
+    if (error) throw error;
+    invalidateAdminMonopolyCache();
+    return await fetchMonopolyStore(true);
+  }
+  const latest = await fetchMonopolyStore();
+  return persistMonopolyStore({
+    ...latest,
+    wheelSpinsHistory: [],
+    wheelSpinsCount: 0,
+    lastWheelResult: null
+  });
+}
+
+/**
+ * Admin: Delete a specific spin from history and refund rent
+ */
+export async function deleteWheelSpinByIdAdmin(spinId) {
+  if (supabase) {
+    const { data, error } = await supabase.rpc('monopoly_delete_wheel_spin_by_id', {
+      p_spin_id: String(spinId)
+    });
+    if (error) throw error;
+    invalidateAdminMonopolyCache();
+    return await fetchMonopolyStore(true);
+  }
+  const latest = await fetchMonopolyStore();
+  const history = Array.isArray(latest.wheelSpinsHistory) ? latest.wheelSpinsHistory : [];
+  const nextHistory = history.filter((s) => s.id !== spinId);
+  return persistMonopolyStore({
+    ...latest,
+    wheelSpinsHistory: nextHistory,
+    wheelSpinsCount: nextHistory.length
   });
 }

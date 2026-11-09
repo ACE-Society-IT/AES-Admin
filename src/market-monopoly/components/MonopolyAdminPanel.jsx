@@ -20,6 +20,8 @@ import {
   releaseNextWheelSpinAdmin,
   triggerWheelSpinAdmin,
   deleteWheelSpinAdmin,
+  resetWheelSpinsAdmin,
+  deleteWheelSpinByIdAdmin,
   adjustTeamCashAdmin,
   addNewTeamAdmin,
   deleteTeamAdmin,
@@ -573,6 +575,38 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     const waveSpins = store?.wheelSpinsByRound?.[activeWave] || {};
     return store.teams.filter((t) => !waveSpins[t.id]);
   }, [store?.teams, store?.wheelSpinsByRound, activeWave]);
+
+  const handleResetSpins = async () => {
+    if (!window.confirm('Are you sure you want to reset all wheel spins? This will clear the spin history and counter.')) {
+      return;
+    }
+    try {
+      setIsSpinningWheelAdmin(true);
+      const fresh = await resetWheelSpinsAdmin();
+      setStore(fresh);
+      notify('Wheel spins history reset.');
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setIsSpinningWheelAdmin(false);
+    }
+  };
+
+  const handleDeleteSpinById = async (spinId, teamName, propName) => {
+    if (!window.confirm(`Delete Spin for ${teamName} (${propName})? Rent will be refunded.`)) {
+      return;
+    }
+    try {
+      setIsSpinningWheelAdmin(true);
+      const fresh = await deleteWheelSpinByIdAdmin(spinId);
+      setStore(fresh);
+      notify(`Deleted spin for ${teamName}. Rent refunded.`);
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setIsSpinningWheelAdmin(false);
+    }
+  };
 
   const handleDeleteTeamSpin = async (teamId, teamName) => {
     if (!window.confirm(`Are you sure you want to delete ${teamName}'s spin for Wave #${activeWave}? This will reverse rent settlement and restore ${teamName} to the spin selection.`)) {
@@ -1768,185 +1802,170 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
             {/* ============================================================= */}
             {activeTab === 'wheel' && (
               <div className="space-y-6">
-                {/* Active Wave Header & Overall Controls */}
-                <div className="editorial-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Header & Main Spin Button */}
+                <div className="editorial-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs uppercase text-[#71717A]">
-                        Active Round
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#71717A] font-bold">
+                        Live Dual Wheel Arena
                       </span>
                       <span className="editorial-badge text-[10px] bg-[#FEF3F2] text-[#B42318] border-[#FECDCA] font-bold">
-                        Wave #{currentWheelRound}
+                        {Array.isArray(store.wheelSpinsHistory) ? store.wheelSpinsHistory.length : 0} Spins Completed
                       </span>
                     </div>
-                    <h2 className="text-xl font-bold text-[#0F0F11] mt-0.5">
+                    <h2 className="text-xl font-bold text-[#0F0F11]">
                       Classroom Wheel Spin Controls
                     </h2>
                     <p className="text-xs font-mono text-[#71717A] mt-1">
-                      Results animate live on the Classroom Projector with dramatic 5-second countdown. Select a team below to trigger their spin.
+                      Dual Wheel spins both the Karachi Property and the Paying Team at random. Results animate live on the Classroom Projector.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <button
                       type="button"
-                      disabled={isSpinningWheelAdmin || unspunTeams.length === 0}
-                      onClick={async () => {
-                        try {
-                          setIsSpinningWheelAdmin(true);
-                          const up = await triggerWheelSpinAdmin({ teamId: 'ALL_UNSPUN' });
-                          setStore(up);
-                          notify('Spun wheel for all remaining teams!');
-                        } catch (err) {
-                          notify(err.message, 'err');
-                        } finally {
-                          setIsSpinningWheelAdmin(false);
-                        }
-                      }}
-                      className="editorial-btn editorial-btn-green py-2.5 px-4 text-xs font-bold disabled:opacity-40"
+                      onClick={() => setIsWheelModalOpen(true)}
+                      className="editorial-btn editorial-btn-green py-3.5 px-8 text-sm font-black flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl cursor-pointer"
                     >
-                      {isSpinningWheelAdmin ? 'Spinning...' : `Spin All Remaining (${unspunTeams.length})`}
+                      <RotateCw className="w-4 h-4 text-[#052E16]" />
+                      <span>Spin the Wheel</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handleReleaseNextWheelSpin}
-                      className="editorial-btn editorial-btn-dark py-2.5 px-4 text-xs font-bold"
-                    >
-                      Advance to Wave #{currentWheelRound + 1}
-                    </button>
+                    {Array.isArray(store.wheelSpinsHistory) && store.wheelSpinsHistory.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleResetSpins}
+                        className="editorial-btn editorial-btn-outline py-2.5 px-4 text-xs font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors cursor-pointer"
+                      >
+                        Reset Spins
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Dual Wheel Spin Arena (No team selection: Wheel spins Property & Paying Team) */}
-                <div className="editorial-card p-6 bg-gradient-to-r from-[#1C050B] via-[#2A0812] to-[#140207] border-2 border-[#ECC37A] text-[#F8EEE1] shadow-2xl space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ECC37A]/30 pb-3">
+                {/* SPIN HISTORY LOG */}
+                <div className="editorial-card p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#E4E4E7] pb-3">
                     <div>
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#F1CA7E] block">
-                        Dual Wheel Arena
-                      </span>
-                      <h3 className="text-lg font-bold font-serif text-[#F8EEE1]">
-                        Wave #{currentWheelRound} Live Spin Arena
+                      <h3 className="text-base font-bold text-[#0F0F11]">
+                        Wheel Spin Activity Log ({Array.isArray(store.wheelSpinsHistory) ? store.wheelSpinsHistory.length : 0} Spins)
                       </h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#701020] text-[#F1CA7E] border border-[#F1CA7E]/40">
-                        {unspunTeams.length} / {store.teams.length} Teams Waiting
-                      </span>
+                      <p className="text-xs font-mono text-[#71717A] mt-0.5">
+                        Chronological log of all spins. Deleting a spin automatically refunds rent to the tenant.
+                      </p>
                     </div>
                   </div>
 
-                  {unspunTeams.length > 0 ? (
-                    <div className="space-y-4 py-2">
-                      <p className="text-xs text-[#F1CA7E]/90 leading-relaxed">
-                        The dual wheel randomly spins both the <strong>Karachi Property</strong> and the <strong>Paying Team</strong>. When settled, rent is automatically debited from the chosen team and credited to the property owner, displaying a celebratory result popup and broadcasting to the classroom projector.
-                      </p>
+                  {Array.isArray(store.wheelSpinsHistory) && store.wheelSpinsHistory.length > 0 ? (
+                    <div className="divide-y divide-[#E4E4E7] max-h-[480px] overflow-y-auto pr-1">
+                      {[...store.wheelSpinsHistory].reverse().map((spin, idx) => {
+                        const spinNumber = spin.spinNumber || (store.wheelSpinsHistory.length - idx);
+                        return (
+                          <div key={spin.id || idx} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-3">
+                              <span className="w-8 h-8 rounded-full bg-[#1C050B] text-[#F1CA7E] font-mono font-bold flex items-center justify-center text-xs shrink-0 border border-[#ECC37A]/40">
+                                #{spinNumber}
+                              </span>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-sm font-bold text-[#0F0F11] font-serif">
+                                    {spin.teamName}
+                                  </strong>
+                                  <span className="text-[10px] font-mono text-[#71717A]">
+                                    landed on
+                                  </span>
+                                  <span className="font-mono font-bold text-[#8D5B3A]">
+                                    #{spin.propertyId} {spin.propertyName}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] font-mono text-[#71717A] flex items-center gap-2 flex-wrap">
+                                  <span>Owner: <strong className="text-[#0F0F11]">{spin.ownerTeamName || 'Unclaimed'}</strong></span>
+                                  <span>·</span>
+                                  <span>{new Date(spin.timestamp || Date.now()).toLocaleTimeString()}</span>
+                                </div>
+                              </div>
+                            </div>
 
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={isSpinningWheelAdmin}
-                          onClick={() => setIsWheelModalOpen(true)}
-                          className="editorial-btn editorial-btn-green py-3.5 px-8 text-sm font-black flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl disabled:opacity-50 cursor-pointer"
-                        >
-                          <RotateCw className="w-4 h-4 text-[#052E16]" />
-                          <span>Open Dual Spin Wheel (Property &amp; Team)</span>
-                        </button>
-                      </div>
+                            <div className="flex items-center gap-3 self-end sm:self-center">
+                              <span className={`editorial-badge text-xs font-mono font-bold ${
+                                spin.status === 'PAID_RENT'
+                                  ? 'bg-[#FEF3F2] text-[#B42318] border-[#FECDCA]'
+                                  : spin.status === 'OWN_PROPERTY'
+                                  ? 'bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5]'
+                                  : 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF]'
+                              }`}>
+                                {spin.status === 'PAID_RENT'
+                                  ? `- Rs ${spin.rentAmount}L Rent Paid`
+                                  : spin.status === 'OWN_PROPERTY'
+                                  ? '0L (Own Property)'
+                                  : '0L (Unclaimed)'}
+                              </span>
 
-                      <p className="text-[11px] font-mono text-[#F1CA7E]/70">
-                        Notice: Unspun teams are selected by the Team Wheel. Once all teams have spun, advance to the next wave above.
-                      </p>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSpinById(spin.id, spin.teamName, spin.propertyName)}
+                                className="editorial-btn text-[11px] py-1.5 px-3 font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors cursor-pointer"
+                                title="Delete this spin and refund rent"
+                              >
+                                Undo Spin
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="py-4 text-center space-y-3">
-                      <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#0E2E1D] border border-[#22C55E]/50 text-[#86EFAC] text-xs font-mono font-bold">
-                        <span>[Completed]</span> All {store.teams.length} teams have spun for Wave #{currentWheelRound}!
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-[#F4F4F5] border border-[#E4E4E7] flex items-center justify-center mx-auto text-[#71717A]">
+                        <RotateCw className="w-5 h-5 text-[#71717A]" />
                       </div>
-                      <p className="text-xs text-[#F1CA7E]/80">
-                        Ready for the next round? Click &quot;Advance to Wave #{currentWheelRound + 1}&quot; above, or delete any spin below if a correction is needed.
-                      </p>
+                      <div className="space-y-1">
+                        <strong className="text-sm font-bold text-[#0F0F11] block">
+                          No Wheel Spins Executed Yet
+                        </strong>
+                        <p className="text-xs text-[#71717A]">
+                          Click &quot;Spin the Wheel&quot; above to launch the Dual Wheel. Results will stream here and on the classroom projector.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Team Spin Results & Delete Options for Current Wave */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-[#0F0F11]">
-                      Wave #{currentWheelRound} Team Spin Status ({store.teams.length - unspunTeams.length} Spun, {unspunTeams.length} Waiting)
-                    </h3>
-                  </div>
+                {/* TEAM IMPACT SUMMARY */}
+                <div className="editorial-card p-6 space-y-4">
+                  <h3 className="text-base font-bold text-[#0F0F11]">
+                    Team Rent Summary
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {(store.teams || []).map((t) => {
+                      const history = Array.isArray(store.wheelSpinsHistory) ? store.wheelSpinsHistory : [];
+                      const spinsAsTenant = history.filter((s) => String(s.teamId) === String(t.id));
+                      const spinsAsLandlord = history.filter(
+                        (s) => String(s.ownerTeamId) === String(t.id) && s.status === 'PAID_RENT'
+                      );
+                      const totalRentPaid = spinsAsTenant.reduce((acc, s) => acc + Number(s.rentAmount || 0), 0);
+                      const totalRentEarned = spinsAsLandlord.reduce((acc, s) => acc + Number(s.rentAmount || 0), 0);
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                    {store.teams.map((team) => {
-                      const spinRecord = store.wheelSpinsByRound?.[currentWheelRound]?.[team.id];
                       return (
-                        <div
-                          key={team.id}
-                          className={`editorial-card p-4 space-y-2.5 transition-all ${
-                            spinRecord
-                              ? 'border-l-4 border-l-[#16A34A]'
-                              : 'border-l-4 border-l-[#D97706]'
-                          }`}
-                        >
+                        <div key={t.id} className="p-3.5 rounded-xl border border-[#E4E4E7] bg-[#FAFAFA] space-y-2 text-xs font-mono">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <strong className="text-xs text-[#0F0F11] block leading-tight">{team.name}</strong>
-                              <span className="text-[10px] font-mono text-[#71717A]">Cash: Rs {team.cash}L</span>
-                            </div>
-                            <span
-                              className={`editorial-badge text-[10px] ${
-                                spinRecord
-                                  ? 'bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5]'
-                                  : 'bg-[#FEF6EE] text-[#B54708] border-[#F9DBAF]'
-                              }`}
-                            >
-                              {spinRecord ? 'Spun' : 'Waiting'}
-                            </span>
+                            <strong className="text-sm font-bold text-[#0F0F11] font-sans truncate">{t.name}</strong>
+                            <span className="text-[10px] text-[#71717A]">Cash: Rs {t.cash}L</span>
                           </div>
-
-                          {spinRecord ? (
-                            <div className="space-y-2 pt-1 border-t border-[#E4E4E7]">
-                              <div className="text-xs font-mono text-[#71717A] space-y-0.5">
-                                <div>
-                                  Landed: <strong className="text-[#0F0F11]">#{spinRecord.propertyId} {spinRecord.propertyName}</strong>
-                                </div>
-                                <div>
-                                  Owner: <strong className="text-[#0F0F11]">{spinRecord.ownerTeamName || 'Unowned'}</strong>
-                                </div>
-                                <div className="font-bold text-xs">
-                                  Settlement:{' '}
-                                  <span className={spinRecord.status === 'PAID_RENT' ? 'text-[#DC2626]' : 'text-[#16A34A]'}>
-                                    {spinRecord.status === 'PAID_RENT'
-                                      ? `-Rs ${spinRecord.rentAmount}L (Paid)`
-                                      : spinRecord.status === 'OWN_PROPERTY'
-                                      ? '0L (Own Property)'
-                                      : '0L (Unowned)'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="pt-1 border-t border-[#E4E4E7]/60">
-                                <button
-                                  type="button"
-                                  disabled={isSpinningWheelAdmin}
-                                  onClick={() => handleDeleteTeamSpin(team.id, team.name)}
-                                  className="w-full editorial-btn text-[10px] py-1.5 px-2 font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors cursor-pointer"
-                                  title="Delete this spin and refund any rent paid"
-                                >
-                                  Delete Spin
-                                </button>
-                              </div>
+                          <div className="space-y-1 text-[11px] pt-1 border-t border-[#E4E4E7]">
+                            <div className="flex justify-between">
+                              <span className="text-[#71717A]">Times Spun:</span>
+                              <strong className="text-[#0F0F11]">{spinsAsTenant.length}</strong>
                             </div>
-                          ) : (
-                            <div className="pt-2 border-t border-[#E4E4E7] flex items-center justify-between">
-                              <span className="text-[11px] font-mono text-[#71717A]">
-                                Waiting for wheel spin
-                              </span>
-                              <span className="w-2 h-2 rounded-full bg-[#D97706] animate-pulse" />
+                            <div className="flex justify-between">
+                              <span className="text-[#71717A]">Rent Paid:</span>
+                              <strong className="text-[#DC2626]">Rs {totalRentPaid.toFixed(1)}L</strong>
                             </div>
-                          )}
+                            <div className="flex justify-between">
+                              <span className="text-[#71717A]">Rent Earned:</span>
+                              <strong className="text-[#16A34A]">Rs {totalRentEarned.toFixed(1)}L</strong>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}

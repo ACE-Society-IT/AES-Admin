@@ -146,8 +146,6 @@ export default function AdminSpinWheelModal({
   const teamSliceAngle = 360 / totalTeamSlices;
 
   const activeWave = Number(store.currentWheelRound || 1);
-  const waveSpins = store.wheelSpinsByRound?.[activeWave] || {};
-  const unspunCount = teams.filter((t) => !waveSpins[t.id]).length;
 
   const handleStartSpin = async () => {
     if (isSpinning) return;
@@ -252,21 +250,21 @@ export default function AdminSpinWheelModal({
           <div className="p-4 sm:p-5 border-b border-[#ECC37A]/25 flex items-center justify-between gap-4 bg-[#1C050B]">
             <div className="flex items-center gap-3">
               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#701020] text-[#F1CA7E] border border-[#F1CA7E]/40">
-                Wave #{activeWave}
+                Live Spin Arena
               </span>
               <div>
                 <h3 className="text-lg sm:text-xl font-bold font-serif text-[#F8EEE1] leading-tight">
                   Dual Wheel Arena: Property &amp; Team Spin
                 </h3>
                 <p className="text-xs font-mono text-[#F1CA7E]/80">
-                  The wheel spins both the target property and the payer team.
+                  Pure luck wheel spin. Any team can be chosen repeatedly.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-mono bg-[#2A0812] border border-[#ECC37A]/30 text-[#F1CA7E]">
-                {teams.length - unspunCount} / {teams.length} Spun
+                {Array.isArray(store.wheelSpinsHistory) ? store.wheelSpinsHistory.length : (store.wheelSpinsCount || 0)} Spins Completed
               </span>
               <button
                 type="button"
@@ -526,7 +524,7 @@ export default function AdminSpinWheelModal({
                     className="w-full max-w-md bg-[#1C050B] border-2 border-[#ECC37A] rounded-2xl shadow-2xl p-6 text-center space-y-4"
                   >
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#701020] border border-[#F1CA7E]/40 text-[#F1CA7E] text-[11px] font-mono font-bold uppercase tracking-wider">
-                      Wheel Outcome
+                      {outcome.spinNumber ? `Spin #${outcome.spinNumber} Outcome` : 'Wheel Outcome'}
                     </div>
 
                     {/* TEAM NAME (WHO WAS SPUN) */}
