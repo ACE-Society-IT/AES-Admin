@@ -91,14 +91,13 @@ export async function manageStockDirect(passkey, action, stockData = {}) {
  */
 export async function toggleProjectorResultsDirect(passkey, shouldReveal = null) {
   const cleanPass = String(passkey || '').trim();
-  const { data: adminData } = await supabase
+  const { data: adminRows } = await supabase
     .from('investomania_admin')
-    .select('passkey')
-    .limit(1)
-    .single();
-  const validPass = adminData?.passkey || 'pepe';
+    .select('passkey');
+  const validPasskeys = (adminRows || []).map((r) => String(r.passkey || '').trim().toLowerCase());
+  const isValid = validPasskeys.includes(cleanPass.toLowerCase()) || cleanPass.toLowerCase() === 'pepe';
 
-  if (!cleanPass || (cleanPass !== validPass && cleanPass.toLowerCase() !== 'pepe')) {
+  if (!cleanPass || !isValid) {
     throw new Error('Unauthorized: Invalid Admin Passkey');
   }
 
@@ -140,14 +139,13 @@ export async function toggleProjectorResultsDirect(passkey, shouldReveal = null)
 export async function manageCrisisDirect(passkey, action, params = {}) {
   // 1. Verify admin passkey
   const cleanPass = String(passkey || '').trim();
-  const { data: adminData } = await supabase
+  const { data: adminRows } = await supabase
     .from('investomania_admin')
-    .select('passkey')
-    .limit(1)
-    .single();
-  const validPass = adminData?.passkey || 'pepe';
+    .select('passkey');
+  const validPasskeys = (adminRows || []).map((r) => String(r.passkey || '').trim().toLowerCase());
+  const isValid = validPasskeys.includes(cleanPass.toLowerCase()) || cleanPass.toLowerCase() === 'pepe';
 
-  if (!cleanPass || (cleanPass !== validPass && cleanPass.toLowerCase() !== 'pepe')) {
+  if (!cleanPass || !isValid) {
     throw new Error('Unauthorized: Invalid Admin Passkey');
   }
 

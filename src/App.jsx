@@ -863,13 +863,13 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
               <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                 {adminPasskeys.map((p, idx) => {
                   const keyVal = p.keyMask || p.key || (typeof p === 'string' ? p : 'adm••••key');
-                  const deleteTarget = p.id || p.key || p.keyMask || (typeof p === 'string' ? p : '');
-                  const labelVal = p.label || 'Admin Key';
+                  const deleteTarget = p.key || p.keyMask || p.id || (typeof p === 'string' ? p : '');
+                  const labelVal = p.label || p.role || 'Admin Key';
                   const isLastKey = adminPasskeys.length <= 1;
 
                   return (
                     <div
-                      key={p.id || idx}
+                      key={p.id || p.key || idx}
                       className="p-3 rounded-lg flex items-center justify-between gap-3 text-xs"
                       style={{ background: 'var(--card-inset)', border: '1px solid var(--border-subtle)' }}
                     >
@@ -882,7 +882,7 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
                             <button
                               type="button"
                               onClick={() => copyToClipboard(keyVal)}
-                              className="text-[10px] hover:opacity-75"
+                              className="text-[10px] hover:opacity-75 cursor-pointer"
                               style={{ color: 'var(--ink-muted)' }}
                               title="Copy passkey"
                             >
@@ -898,9 +898,14 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
                       <div className="shrink-0 flex items-center gap-1.5">
                         <button
                           type="button"
+                          disabled={isLastKey}
                           onClick={() => handleDeletePasskey(deleteTarget)}
-                          className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-950/40 text-[#DC2626] dark:text-red-400 border border-transparent hover:border-red-300 dark:hover:border-red-900 transition-colors"
-                          title="Revoke Credential"
+                          className={`p-1.5 rounded border border-transparent transition-colors ${
+                            isLastKey
+                              ? 'opacity-30 cursor-not-allowed text-gray-400'
+                              : 'hover:bg-red-100 dark:hover:bg-red-950/40 text-[#DC2626] dark:text-red-400 hover:border-red-300 dark:hover:border-red-900 cursor-pointer'
+                          }`}
+                          title={isLastKey ? 'Cannot delete the only remaining admin passkey' : 'Revoke Credential'}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
