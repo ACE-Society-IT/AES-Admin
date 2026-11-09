@@ -29,6 +29,7 @@ import {
   computeTeamSummary
 } from '../lib/monopolyAdminService.js';
 import AdminSpinWheelModal from './AdminSpinWheelModal.jsx';
+import { RotateCw } from 'lucide-react';
 import aesLogo from '../../assets/aes-logo.png';
 
 function AdminPropertySvgBanner({ category = 'Residential', level = 0 }) {
