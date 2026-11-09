@@ -2479,14 +2479,15 @@ export const KARACHI_PROPERTIES = [
 
 export const DEFAULT_MONOPOLY_TEAMS = [];
 
-// Calculate current valuation of a property based on its upgrade level (Max Level 3) and attached utilities
+// Calculate current valuation of a property based on its upgrade level (Max Level 3).
+// Valuation strictly reflects property level and ONLY increases when the property is upgraded.
 export function computePropertyValuation(prop) {
   if (!prop) return 0;
   const open = Number(prop.openingValue || 0);
   const lvl = Math.min(3, Math.max(0, Number(prop.upgradeLevel || 0)));
 
   let baseAtLevel = open;
-  if (Array.isArray(prop.targetValues) && prop.targetValues.length > lvl && prop.targetValues[lvl] > 0) {
+  if (Array.isArray(prop.targetValues) && prop.targetValues.length > lvl && Number(prop.targetValues[lvl]) > 0) {
     baseAtLevel = Number(prop.targetValues[lvl]);
   } else {
     const target = Number(prop.level3Target || open * 1.6);
@@ -2496,14 +2497,37 @@ export function computePropertyValuation(prop) {
     if (lvl >= 3) baseAtLevel = target;
   }
 
-  // Each installed utility adds its asset cost to the property valuation
-  const utilIds = Array.isArray(prop.attachedUtilities) ? prop.attachedUtilities : [];
-  const utilValue = utilIds.reduce((sum, uId) => {
-    const found = KARACHI_UTILITIES.find((u) => u.id === Number(uId));
-    return sum + (found ? found.cost : 0);
-  }, 0);
+  // Value strictly depends on upgrade level, not on raw attached token costs
+  return baseAtLevel;
+}
 
-  return baseAtLevel + utilValue;
+// Compute property upgrade level based on attached utilities meeting recipe requirements
+export function computePropertyUpgradeLevel(prop, attachedUtilIds = null) {
+  if (!prop) return 0;
+  const attached = (attachedUtilIds !== null ? attachedUtilIds : (prop.attachedUtilities || [])).map(Number);
+  let lvl = Math.min(3, Math.max(0, Number(prop.upgradeLevel || 0)));
+
+  const reqs = prop.upgradeRequirements;
+  if (reqs && typeof reqs === 'object') {
+    for (let l = 1; l <= 3; l++) {
+      const list = reqs[String(l)];
+      if (Array.isArray(list) && list.length > 0) {
+        let allMet = true;
+        for (const req of list) {
+          const countInAttached = attached.filter((id) => id === Number(req.utilityId)).length;
+          if (countInAttached < Number(req.count || 1)) {
+            allMet = false;
+            break;
+          }
+        }
+        if (allMet) {
+          lvl = Math.max(lvl, l);
+        }
+      }
+    }
+  }
+
+  return Math.min(3, Math.max(0, lvl));
 }
 
 // Calculate rent payable when the spin wheel lands on a property
