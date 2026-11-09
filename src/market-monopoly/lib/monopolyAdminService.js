@@ -1068,6 +1068,8 @@ export async function triggerWheelSpinAdmin({ teamId }) {
 
   const teamsToSpin = teamId === 'ALL'
     ? latest.teams
+    : teamId === 'ALL_UNSPUN'
+    ? latest.teams.filter((t) => !(latest.wheelSpinsByRound?.[currentWave] || {})[t.id])
     : latest.teams.filter((t) => String(t.id) === String(teamId));
 
   if (teamsToSpin.length === 0) throw new Error("No eligible teams found to spin.");
@@ -1171,5 +1173,87 @@ export async function triggerWheelSpinAdmin({ teamId }) {
     wheelSpinsByRound: nextWheelSpinsByRound,
     lastWheelResult: lastOutcome,
     transactions: [...newTransactions, ...(latest.transactions || [])]
+  });
+}
+
+/**
+ * Admin: Delete a Wheel Spin for a team in a specific round.
+ * Reverses any rent paid (refunds spinner, deducts from landlord),
+ * removes the spin record, updates lastWheelResult, and logs transaction.
+ */
+export async function deleteWheelSpinAdmin({ round, teamId }) {
+  const latest = await fetchMonopolyStore();
+  const wave = Number(round || latest.currentWheelRound || 1);
+  const nextWheelSpinsByRound = { ...(latest.wheelSpinsByRound || {}) };
+  const currentRoundSpins = { ...(nextWheelSpinsByRound[wave] || {}) };
+  const spinRecord = currentRoundSpins[teamId];
+
+  if (!spinRecord) {
+    throw new Error(`No spin record found for this team in Wave #${wave}.`);
+  }
+
+  let nextTeams = [...(latest.teams || [])];
+  const rentAmount = Number(spinRecord.rentAmount || 0);
+  const status = spinRecord.status;
+  const ownerTeamId = spinRecord.ownerTeamId;
+
+  // Reverse rent settlement if rent was paid
+  if (status === 'PAID_RENT' && rentAmount > 0) {
+    nextTeams = nextTeams.map((t) => {
+      if (String(t.id) === String(teamId)) {
+        return { ...t, cash: Number((Number(t.cash || 0) + rentAmount).toFixed(2)) };
+      }
+      if (ownerTeamId && String(t.id) === String(ownerTeamId)) {
+        return { ...t, cash: Number((Number(t.cash || 0) - rentAmount).toFixed(2)) };
+      }
+      return t;
+    });
+  }
+
+  // Delete the spin record
+  delete currentRoundSpins[teamId];
+  nextWheelSpinsByRound[wave] = currentRoundSpins;
+
+  // Clear or update lastWheelResult if it was this spin
+  let nextLastWheelResult = latest.lastWheelResult;
+  if (
+    nextLastWheelResult &&
+    String(nextLastWheelResult.teamId) === String(teamId) &&
+    Number(nextLastWheelResult.wheelRound || wave) === wave
+  ) {
+    const remainingSpins = Object.values(currentRoundSpins);
+    nextLastWheelResult = remainingSpins.length > 0 ? remainingSpins[remainingSpins.length - 1] : null;
+  }
+
+  const tx = {
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    type: 'WHEEL_SPIN_DELETED',
+    teamId: spinRecord.teamId,
+    teamName: spinRecord.teamName,
+    propertyId: spinRecord.propertyId,
+    propertyName: spinRecord.propertyName,
+    amount: rentAmount,
+    note: `Admin deleted Wheel Spin #${wave} for ${spinRecord.teamName} (Landed on ${spinRecord.propertyName}${rentAmount > 0 ? `, refunded Rs ${rentAmount}L rent` : ''})`,
+    createdAt: new Date().toISOString()
+  };
+
+  await supabase.from('monopoly_transactions').upsert({
+    id: tx.id,
+    type: tx.type,
+    team_id: tx.teamId,
+    team_name: tx.teamName,
+    property_id: tx.propertyId,
+    property_name: tx.propertyName,
+    amount: tx.amount,
+    note: tx.note,
+    created_at: tx.createdAt
+  });
+
+  return persistMonopolyStore({
+    ...latest,
+    teams: nextTeams,
+    wheelSpinsByRound: nextWheelSpinsByRound,
+    lastWheelResult: nextLastWheelResult,
+    transactions: [tx, ...(latest.transactions || [])]
   });
 }
