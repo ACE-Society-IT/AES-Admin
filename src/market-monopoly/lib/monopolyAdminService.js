@@ -1,4 +1,4 @@
-import { supabase } from '../../supabaseClient.js';
+import { supabase, supabaseAdmin } from '../../supabaseClient.js';
 import {
   KARACHI_PROPERTIES,
   KARACHI_UTILITIES,
@@ -7,6 +7,15 @@ import {
   computePropertyRent,
   computePropertyValuation
 } from '../data/monopolyData.js';
+
+export function getAdminPasskey() {
+  if (typeof window === 'undefined') return 'pepe';
+  return (
+    sessionStorage.getItem('alphaace_admin_passkey') ||
+    localStorage.getItem('alphaace_admin_passkey') ||
+    'pepe'
+  );
+}
 
 export function getInitialStore() {
   return {
@@ -259,7 +268,7 @@ export async function persistMonopolyStore(nextStore) {
         owned_resources: Array.isArray(t.ownedResources) ? t.ownedResources : [],
         updated_at: new Date().toISOString()
       }));
-      await supabase.from('monopoly_teams').upsert(teamRows, { onConflict: 'id' });
+      await (supabaseAdmin || supabase).from('monopoly_teams').upsert(teamRows, { onConflict: 'id' });
     }
   }
 
@@ -279,10 +288,10 @@ export async function persistMonopolyStore(nextStore) {
       attached_utilities: p.attachedUtilities || [],
       updated_at: new Date().toISOString()
     }));
-    await supabase.from('monopoly_properties').upsert(propRows, { onConflict: 'id' });
+    await (supabaseAdmin || supabase).from('monopoly_properties').upsert(propRows, { onConflict: 'id' });
   }
 
-  const { error: stateErr } = await supabase
+  const { error: stateErr } = await (supabaseAdmin || supabase)
     .from('monopoly_state')
     .upsert(
       {
@@ -308,7 +317,8 @@ export async function recordAuctionWin({ store, propertyId, teamId, bidAmount })
     const { data: res, error } = await supabase.rpc('monopoly_record_auction_win', {
       p_property_id: Number(propertyId),
       p_team_id: String(teamId),
-      p_bid_amount: Number(bidAmount)
+      p_bid_amount: Number(bidAmount),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected auction win.');
@@ -366,7 +376,7 @@ export async function recordAuctionWin({ store, propertyId, teamId, bidAmount })
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
@@ -404,7 +414,8 @@ export async function assignMultiplePropertiesToTeam({
     const { data: res, error } = await supabase.rpc('monopoly_assign_multiple_properties', {
       p_team_id: String(teamId),
       p_property_ids: propIdList,
-      p_utility_ids: resIdList
+      p_utility_ids: resIdList,
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected batch assignment.');
@@ -503,7 +514,7 @@ export async function assignMultiplePropertiesToTeam({
       createdAt: new Date(nowBase).toISOString()
     };
     newTxs.push(propTx);
-    await supabase.from('monopoly_transactions').upsert({
+    await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
       id: propTx.id,
       type: propTx.type,
       team_id: propTx.teamId,
@@ -539,7 +550,7 @@ export async function assignMultiplePropertiesToTeam({
       createdAt: new Date(nowBase + 1).toISOString()
     };
     newTxs.push(resTx);
-    await supabase.from('monopoly_transactions').upsert({
+    await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
       id: resTx.id,
       type: resTx.type,
       team_id: resTx.teamId,
@@ -622,7 +633,8 @@ export async function updatePropertySettingsAdmin({
       p_opening_value: nextPrice,
       p_rent_values: nextRentValues,
       p_upgrade_costs: nextUpgradeCosts,
-      p_upgrade_level: nextLvl
+      p_upgrade_level: nextLvl,
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected property update.');
@@ -655,7 +667,7 @@ export async function updatePropertySettingsAdmin({
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     property_id: tx.propertyId,
@@ -678,7 +690,8 @@ export async function updatePropertySettingsAdmin({
 export async function revokePropertySale({ store, propertyId }) {
   if (supabase) {
     const { data: res, error } = await supabase.rpc('monopoly_revoke_property_sale', {
-      p_property_id: Number(propertyId)
+      p_property_id: Number(propertyId),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected revoking sale.');
@@ -735,7 +748,7 @@ export async function revokePropertySale({ store, propertyId }) {
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
@@ -763,7 +776,8 @@ export async function recordResourceBidWin({ store, utilityId, teamId, bidAmount
     const { data: res, error } = await supabase.rpc('monopoly_record_resource_bid_win', {
       p_utility_id: Number(utilityId),
       p_team_id: String(teamId),
-      p_bid_amount: Number(bidAmount)
+      p_bid_amount: Number(bidAmount),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected resource bid win.');
@@ -816,7 +830,7 @@ export async function recordResourceBidWin({ store, utilityId, teamId, bidAmount
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
@@ -842,7 +856,8 @@ export async function revokeResourceBid({ store, teamId, instanceId }) {
   if (supabase) {
     const { data: res, error } = await supabase.rpc('monopoly_revoke_resource_bid', {
       p_team_id: String(teamId),
-      p_instance_id: String(instanceId)
+      p_instance_id: String(instanceId),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected revoking resource bid.');
@@ -897,7 +912,7 @@ export async function revokeResourceBid({ store, teamId, instanceId }) {
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
@@ -922,7 +937,9 @@ export async function revokeResourceBid({ store, teamId, instanceId }) {
  */
 export async function releaseNextWheelSpinAdmin({ store }) {
   if (supabase) {
-    const { data: res, error } = await supabase.rpc('monopoly_release_next_wheel_round');
+    const { data: res, error } = await supabase.rpc('monopoly_release_next_wheel_round', {
+      p_passkey: getAdminPasskey()
+    });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected advancing round.');
     return await fetchMonopolyStore(true);
@@ -938,7 +955,7 @@ export async function releaseNextWheelSpinAdmin({ store }) {
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     amount: tx.amount,
@@ -961,7 +978,8 @@ export async function adjustTeamCashAdmin({ store, teamId, deltaAmount, reason =
     const { data: res, error } = await supabase.rpc('monopoly_adjust_team_cash', {
       p_team_id: String(teamId),
       p_delta: Number(deltaAmount),
-      p_reason: String(reason || 'Admin adjustment')
+      p_reason: String(reason || 'Admin adjustment'),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected cash adjustment.');
@@ -989,7 +1007,7 @@ export async function adjustTeamCashAdmin({ store, teamId, deltaAmount, reason =
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
@@ -1015,7 +1033,8 @@ export async function addNewTeamAdmin({ store, name, username, passcode, startin
       p_name: String(name),
       p_username: String(username || name.toLowerCase().replace(/\s+/g, '_')),
       p_passcode: String(passcode || '1234'),
-      p_starting_cash: Number(startingCash || 500)
+      p_starting_cash: Number(startingCash || 500),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected adding team.');
@@ -1054,7 +1073,7 @@ export async function addNewTeamAdmin({ store, name, username, passcode, startin
     ownedResources: []
   };
 
-  await supabase.from('monopoly_teams').upsert(
+  await (supabaseAdmin || supabase).from('monopoly_teams').upsert(
     {
       id: String(newTeam.id),
       name: newTeam.name,
@@ -1080,7 +1099,8 @@ export async function addNewTeamAdmin({ store, name, username, passcode, startin
 export async function deleteTeamAdmin({ store, teamId }) {
   if (supabase) {
     const { data: res, error } = await supabase.rpc('monopoly_delete_team', {
-      p_team_id: String(teamId)
+      p_team_id: String(teamId),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected deleting team.');
@@ -1105,7 +1125,7 @@ export async function deleteTeamAdmin({ store, teamId }) {
       : p
   );
 
-  await supabase
+  await (supabaseAdmin || supabase)
     .from('monopoly_properties')
     .update({
       owner_team_id: null,
@@ -1115,7 +1135,7 @@ export async function deleteTeamAdmin({ store, teamId }) {
     })
     .eq('owner_team_id', String(teamId));
 
-  await supabase.from('monopoly_teams').delete().eq('id', String(teamId));
+  await (supabaseAdmin || supabase).from('monopoly_teams').delete().eq('id', String(teamId));
 
   return persistMonopolyStore({
     ...latest,
@@ -1126,13 +1146,15 @@ export async function deleteTeamAdmin({ store, teamId }) {
 
 export async function resetMonopolyGameAdmin() {
   if (supabase) {
-    const { data: res, error } = await supabase.rpc('monopoly_reset_game');
+    const { data: res, error } = await supabase.rpc('monopoly_reset_game', {
+      p_passkey: getAdminPasskey()
+    });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected resetting game.');
     return await fetchMonopolyStore(true);
   }
 
-  await supabase
+  await (supabaseAdmin || supabase)
     .from('monopoly_properties')
     .update({
       owner_team_id: null,
@@ -1142,8 +1164,8 @@ export async function resetMonopolyGameAdmin() {
     })
     .gte('id', 1);
 
-  await supabase.from('monopoly_teams').delete().neq('id', '');
-  await supabase.from('monopoly_transactions').delete().neq('id', '');
+  await (supabaseAdmin || supabase).from('monopoly_teams').delete().neq('id', '');
+  await (supabaseAdmin || supabase).from('monopoly_transactions').delete().neq('id', '');
 
   const fresh = getInitialStore();
   return persistMonopolyStore(fresh);
@@ -1192,7 +1214,8 @@ export async function toggleShowRankingsAdmin({ store, showRankings }) {
   if (supabase) {
     const nextVal = typeof showRankings === 'boolean' ? showRankings : !store?.showRankings;
     const { data: res, error } = await supabase.rpc('monopoly_toggle_show_rankings', {
-      p_show_rankings: Boolean(nextVal)
+      p_show: Boolean(nextVal),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected toggling rankings.');
@@ -1374,7 +1397,8 @@ export async function deleteWheelSpinAdmin({ round, teamId }) {
   if (supabase) {
     const { data: res, error } = await supabase.rpc('monopoly_delete_wheel_spin', {
       p_round: Number(round),
-      p_team_id: String(teamId)
+      p_team_id: String(teamId),
+      p_passkey: getAdminPasskey()
     });
     if (error) throw error;
     if (res && !res.ok) throw new Error(res.error || 'Server rejected deleting wheel spin.');
@@ -1436,7 +1460,7 @@ export async function deleteWheelSpinAdmin({ round, teamId }) {
     createdAt: new Date().toISOString()
   };
 
-  await supabase.from('monopoly_transactions').upsert({
+  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
     id: tx.id,
     type: tx.type,
     team_id: tx.teamId,
