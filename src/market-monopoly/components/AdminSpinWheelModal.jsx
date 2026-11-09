@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, RotateCw, Trophy, AlertCircle, CheckCircle2, Coins, ArrowDown, ChevronRight } from 'lucide-react';
+import { X, RotateCw, Trophy, AlertCircle, Coins, ArrowDown, Users, Building2, ChevronRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient.js';
 import { fetchMonopolyStore, invalidateAdminMonopolyCache } from '../lib/monopolyAdminService.js';
-import { KARACHI_PROPERTIES, computePropertyRent } from '../data/monopolyData.js';
+import { KARACHI_PROPERTIES } from '../data/monopolyData.js';
 
 const SHORT_PROPERTY_NAMES = {
   1: 'DHA Phase 6',
@@ -33,12 +33,25 @@ const SHORT_PROPERTY_NAMES = {
   25: 'Hyderi Market'
 };
 
-const SLICE_PALETTE = [
+const PROP_SLICE_PALETTE = [
   { bg: '#701020', text: '#F8EEE1' },
   { bg: '#2A1215', text: '#F1CA7E' },
   { bg: '#8B1E32', text: '#FFF8F6' },
   { bg: '#47131C', text: '#E8DCC6' },
   { bg: '#5E1B21', text: '#F1CA7E' }
+];
+
+const TEAM_SLICE_PALETTE = [
+  { bg: '#8B1E32', text: '#FFF8F6', accent: '#ECC37A' }, // Crimson
+  { bg: '#1E3A8A', text: '#EFF6FF', accent: '#93C5FD' }, // Sapphire Blue
+  { bg: '#14532D', text: '#F0FDF4', accent: '#86EFAC' }, // Emerald Green
+  { bg: '#78350F', text: '#FFFBEB', accent: '#FDE047' }, // Amber Gold
+  { bg: '#581C87', text: '#FAF5FF', accent: '#D8B4FE' }, // Royal Purple
+  { bg: '#0F766E', text: '#F0FDFA', accent: '#5EEAD4' }, // Teal
+  { bg: '#9A3412', text: '#FFF7ED', accent: '#FDBA74' }, // Burnt Orange
+  { bg: '#831843', text: '#FDF2F8', accent: '#F472B6' }, // Rose Pink
+  { bg: '#312E81', text: '#EEF2FF', accent: '#A5B4FC' }, // Indigo
+  { bg: '#365314', text: '#F7FEE7', accent: '#BEF264' }  // Lime Green
 ];
 
 function polarToCartesian(cx, cy, r, angleInDegrees) {
@@ -62,8 +75,8 @@ function playTickSound() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(600, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.035);
+    osc.frequency.setValueAtTime(650, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(160, ctx.currentTime + 0.035);
     gain.gain.setValueAtTime(0.08, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
     osc.connect(gain);
@@ -73,10 +86,10 @@ function playTickSound() {
   } catch {}
 }
 
-function playFinishSound(isWin = false) {
+function playFinishSound(isSafe = false) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const freqs = isWin ? [523.25, 659.25, 783.99, 1046.50] : [440, 554.37, 659.25];
+    const freqs = isSafe ? [523.25, 659.25, 783.99, 1046.50] : [440, 554.37, 659.25];
     freqs.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -96,21 +109,25 @@ export default function AdminSpinWheelModal({
   isOpen,
   onClose,
   store,
-  initialTeam,
-  onStoreUpdated
+  onStoreUpdated,
+  autoStart = false
 }) {
-  const [currentTeam, setCurrentTeam] = useState(initialTeam);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [wheelRotation, setWheelRotation] = useState(0);
+  const [propWheelRotation, setPropWheelRotation] = useState(0);
+  const [teamWheelRotation, setTeamWheelRotation] = useState(0);
   const [outcome, setOutcome] = useState(null);
   const [spinError, setSpinError] = useState('');
   const tickIntervalRef = useRef(null);
 
   useEffect(() => {
-    setCurrentTeam(initialTeam);
-    setOutcome(null);
-    setSpinError('');
-  }, [initialTeam]);
+    if (isOpen) {
+      setOutcome(null);
+      setSpinError('');
+      if (autoStart) {
+        handleStartSpin();
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {
@@ -118,17 +135,19 @@ export default function AdminSpinWheelModal({
     };
   }, []);
 
-  if (!isOpen || !store || !currentTeam) return null;
+  if (!isOpen || !store) return null;
 
   const properties = store.properties || KARACHI_PROPERTIES;
-  const totalSlices = properties.length || 25;
-  const sliceAngle = 360 / totalSlices;
-  const activeWave = Number(store.currentWheelRound || 1);
+  const totalPropSlices = properties.length || 25;
+  const propSliceAngle = 360 / totalPropSlices;
 
+  const teams = store.teams || [];
+  const totalTeamSlices = Math.max(1, teams.length);
+  const teamSliceAngle = 360 / totalTeamSlices;
+
+  const activeWave = Number(store.currentWheelRound || 1);
   const waveSpins = store.wheelSpinsByRound?.[activeWave] || {};
-  const unspunTeams = (store.teams || []).filter(
-    (t) => !waveSpins[t.id] && String(t.id) !== String(currentTeam.id)
-  );
+  const unspunCount = teams.filter((t) => !waveSpins[t.id]).length;
 
   const handleStartSpin = async () => {
     if (isSpinning) return;
@@ -137,9 +156,9 @@ export default function AdminSpinWheelModal({
     setIsSpinning(true);
 
     try {
-      // 1. Execute spin on Supabase backend
+      // Execute spin with empty teamId -> server automatically picks an unspun team & random property
       const { data: res, error } = await supabase.rpc('monopoly_execute_wheel_spin', {
-        p_team_id: String(currentTeam.id),
+        p_team_id: '',
         p_property_id: 0
       });
 
@@ -148,32 +167,43 @@ export default function AdminSpinWheelModal({
         throw new Error(res?.error || 'Wheel spin rejected by server.');
       }
 
+      // 1. Calculate Property Landing Angle (under top pointer)
       const landedPropId = Number(res.propertyId);
-      const winningIndex = properties.findIndex((p) => Number(p.id) === landedPropId);
-      const safeIndex = winningIndex !== -1 ? winningIndex : 0;
+      const winningPropIndex = properties.findIndex((p) => Number(p.id) === landedPropId);
+      const safePropIndex = winningPropIndex !== -1 ? winningPropIndex : 0;
+      const propSliceCenter = (safePropIndex + 0.5) * propSliceAngle;
+      const propDesiredMod = (360 - propSliceCenter + 360) % 360;
+      const propCurrentMod = ((propWheelRotation % 360) + 360) % 360;
+      let propDelta = propDesiredMod - propCurrentMod;
+      if (propDelta <= 0) propDelta += 360;
+      const nextPropRotation = propWheelRotation + 360 * 5 + propDelta;
+      setPropWheelRotation(nextPropRotation);
 
-      // 2. Compute exact rotation physics to point at winning slice
-      const sliceCenter = (safeIndex + 0.5) * sliceAngle;
-      const desiredMod = (360 - sliceCenter + 360) % 360;
-      const currentMod = ((wheelRotation % 360) + 360) % 360;
-      let deltaAngle = desiredMod - currentMod;
-      if (deltaAngle <= 0) deltaAngle += 360;
+      // 2. Calculate Team Landing Angle (under top pointer)
+      const landedTeamId = String(res.teamId || res.spinRecord?.teamId || '');
+      const winningTeamIndex = teams.findIndex((t) => String(t.id) === landedTeamId);
+      const safeTeamIndex = winningTeamIndex !== -1 ? winningTeamIndex : 0;
+      const teamSliceCenter = (safeTeamIndex + 0.5) * teamSliceAngle;
+      const teamDesiredMod = (360 - teamSliceCenter + 360) % 360;
+      const teamCurrentMod = ((teamWheelRotation % 360) + 360) % 360;
+      let teamDelta = teamDesiredMod - teamCurrentMod;
+      if (teamDelta <= 0) teamDelta += 360;
+      // Team wheel spins 6 full rotations (slight stagger for maximum drama)
+      const nextTeamRotation = teamWheelRotation + 360 * 6 + teamDelta;
+      setTeamWheelRotation(nextTeamRotation);
 
-      const nextRotation = wheelRotation + 360 * 5 + deltaAngle;
-      setWheelRotation(nextRotation);
-
-      // 3. Audio tick feedback during deceleration
+      // 3. Audio tick feedback during spin
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
       let tickCount = 0;
       tickIntervalRef.current = setInterval(() => {
         tickCount += 1;
         playTickSound();
-        if (tickCount >= 28) {
+        if (tickCount >= 32) {
           clearInterval(tickIntervalRef.current);
         }
-      }, 150);
+      }, 145);
 
-      // 4. Reveal result after 4.5s deceleration animation
+      // 4. Reveal result after 4.8s deceleration animation
       setTimeout(async () => {
         if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
         setIsSpinning(false);
@@ -193,7 +223,7 @@ export default function AdminSpinWheelModal({
         if (onStoreUpdated && fresh) {
           onStoreUpdated(fresh);
         }
-      }, 4500);
+      }, 4900);
     } catch (err) {
       if (tickIntervalRef.current) clearInterval(tickIntervalRef.current);
       setIsSpinning(false);
@@ -201,23 +231,13 @@ export default function AdminSpinWheelModal({
     }
   };
 
-  const handleSelectNextTeam = (next) => {
-    setCurrentTeam(next);
-    setOutcome(null);
-    setSpinError('');
-  };
-
-  const landedProp = outcome
-    ? properties.find((p) => Number(p.id) === Number(outcome.propertyId))
-    : null;
-
   return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
         onClick={() => !isSpinning && onClose()}
       >
         <motion.div
@@ -226,312 +246,410 @@ export default function AdminSpinWheelModal({
           exit={{ opacity: 0, scale: 0.96, y: 12 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-5xl bg-[#140207] border-2 border-[#ECC37A] rounded-2xl shadow-2xl overflow-hidden text-[#F8EEE1] flex flex-col lg:flex-row max-h-[94vh]"
+          className="relative w-full max-w-5xl bg-[#140207] border-2 border-[#ECC37A] rounded-3xl shadow-2xl overflow-hidden text-[#F8EEE1] flex flex-col max-h-[96vh]"
         >
-          {/* LEFT: WHEEL CANVAS & SPINNER ARENA */}
-          <div className="flex-1 p-5 sm:p-6 flex flex-col items-center justify-between gap-4 border-b lg:border-b-0 lg:border-r border-[#ECC37A]/25 overflow-y-auto">
-            {/* Modal Header */}
-            <div className="w-full flex items-center justify-between gap-2 border-b border-[#ECC37A]/20 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-[#701020] text-[#F1CA7E] border border-[#F1CA7E]/40">
-                  Wave #{activeWave}
-                </span>
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold font-serif text-[#F8EEE1] leading-tight">
-                    Karachi Property Wheel
-                  </h3>
-                  <p className="text-[11px] font-mono text-[#F1CA7E]/80">
-                    Live Admin Spin Wheel for {currentTeam.name}
-                  </p>
-                </div>
+          {/* TOP HEADER */}
+          <div className="p-4 sm:p-5 border-b border-[#ECC37A]/25 flex items-center justify-between gap-4 bg-[#1C050B]">
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-[#701020] text-[#F1CA7E] border border-[#F1CA7E]/40">
+                Wave #{activeWave}
+              </span>
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold font-serif text-[#F8EEE1] leading-tight">
+                  Dual Wheel Arena: Property &amp; Team Spin
+                </h3>
+                <p className="text-xs font-mono text-[#F1CA7E]/80">
+                  The wheel spins both the target property and the payer team.
+                </p>
               </div>
+            </div>
 
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex px-3 py-1 rounded-full text-xs font-mono bg-[#2A0812] border border-[#ECC37A]/30 text-[#F1CA7E]">
+                {teams.length - unspunCount} / {teams.length} Spun
+              </span>
               <button
                 type="button"
                 disabled={isSpinning}
                 onClick={onClose}
-                className="w-8 h-8 rounded-lg bg-[#2A0812] hover:bg-[#701020] text-[#F8EEE1] flex items-center justify-center transition-colors disabled:opacity-40 cursor-pointer"
+                className="w-9 h-9 rounded-xl bg-[#2A0812] hover:bg-[#701020] text-[#F8EEE1] flex items-center justify-center transition-colors disabled:opacity-40 cursor-pointer"
                 title="Close Wheel"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* SVG Interactive Wheel Component */}
-            <div className="relative w-[300px] h-[300px] sm:w-[380px] sm:h-[380px] my-2 select-none">
-              {/* TOP POINTER */}
-              <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-xl">
-                <div className="w-4 h-6 bg-gradient-to-b from-[#FFF2CC] to-[#ECC37A] clip-polygon border border-[#47131C] shadow-lg flex items-center justify-center">
-                  <ArrowDown className="w-3.5 h-3.5 text-[#2A0812]" />
-                </div>
-                <div className="w-2.5 h-2.5 rounded-full bg-[#ECC37A] border-2 border-[#140207] -mt-1" />
-              </div>
-
-              {/* WHEEL SVG */}
-              <svg
-                viewBox="0 0 400 400"
-                className="w-full h-full drop-shadow-2xl"
-                style={{
-                  transform: `rotate(${wheelRotation}deg)`,
-                  transition: isSpinning
-                    ? 'transform 4.5s cubic-bezier(0.12, 0.8, 0.18, 1)'
-                    : 'none'
-                }}
-              >
-                {/* Outer Ring Rim */}
-                <circle cx="200" cy="200" r="196" fill="#140207" stroke="#ECC37A" strokeWidth="6" />
-                <circle cx="200" cy="200" r="189" fill="none" stroke="#701020" strokeWidth="4" />
-
-                {/* 25 Property Slices */}
-                {properties.map((prop, idx) => {
-                  const startAngle = idx * sliceAngle;
-                  const endAngle = (idx + 1) * sliceAngle;
-                  const path = createSlicePath(200, 200, 185, startAngle, endAngle);
-                  const palette = SLICE_PALETTE[idx % SLICE_PALETTE.length];
-                  const midAngle = startAngle + sliceAngle / 2;
-                  const textCoord = polarToCartesian(200, 200, 138, midAngle);
-                  const shortName = SHORT_PROPERTY_NAMES[prop.id] || prop.name;
-
-                  return (
-                    <g key={prop.id}>
-                      <path
-                        d={path}
-                        fill={palette.bg}
-                        stroke="#ECC37A"
-                        strokeWidth="0.8"
-                        strokeOpacity="0.5"
-                      />
-                      <g
-                        transform={`translate(${textCoord.x}, ${textCoord.y}) rotate(${midAngle + 90})`}
-                      >
-                        <text
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fill={palette.text}
-                          fontSize="7"
-                          fontWeight="700"
-                          fontFamily="sans-serif"
-                          letterSpacing="0.2px"
-                        >
-                          #{prop.id} {shortName.length > 12 ? shortName.slice(0, 10) + '..' : shortName}
-                        </text>
-                      </g>
-                    </g>
-                  );
-                })}
-
-                {/* Center Hub */}
-                <circle cx="200" cy="200" r="42" fill="#1C050B" stroke="#ECC37A" strokeWidth="4" />
-                <circle cx="200" cy="200" r="34" fill="#701020" stroke="#FFF2CC" strokeWidth="1.5" />
-                <text
-                  x="200"
-                  y="196"
-                  textAnchor="middle"
-                  fill="#F1CA7E"
-                  fontSize="8"
-                  fontWeight="900"
-                  fontFamily="monospace"
-                  letterSpacing="1px"
-                >
-                  KARACHI
-                </text>
-                <text
-                  x="200"
-                  y="207"
-                  textAnchor="middle"
-                  fill="#FFF"
-                  fontSize="7"
-                  fontWeight="700"
-                  fontFamily="sans-serif"
-                >
-                  WAVE #{activeWave}
-                </text>
-              </svg>
-            </div>
-
-            {/* Spin Trigger Button */}
-            <div className="w-full flex items-center justify-center gap-3">
-              <button
-                type="button"
-                disabled={isSpinning}
-                onClick={handleStartSpin}
-                className="w-full py-3.5 px-6 rounded-xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-[#052E16] shadow-xl hover:shadow-2xl flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isSpinning ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin text-[#052E16]" />
-                    <span>Wheel is Spinning...</span>
-                  </>
-                ) : (
-                  <>
-                    <RotateCw className="w-4 h-4 text-[#052E16]" />
-                    <span>Spin Wheel for {currentTeam.name}</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
 
-          {/* RIGHT: OUTCOME BREAKDOWN & NEXT TEAMS */}
-          <div className="w-full lg:w-96 p-5 sm:p-6 bg-[#0E0105] flex flex-col justify-between gap-4 overflow-y-auto">
-            <div className="space-y-4">
-              {/* Active Spinner Team Banner */}
-              <div className="p-3.5 rounded-xl bg-[#1C050B] border border-[#ECC37A]/30 space-y-1.5">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#F1CA7E]">
-                  Current Spinner
-                </span>
-                <div className="flex items-center justify-between">
-                  <h4 className="text-base font-bold text-[#F8EEE1] font-serif">
-                    {currentTeam.name}
-                  </h4>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#2A0812] border border-[#ECC37A]/40 text-xs font-mono text-[#F1CA7E] font-bold">
-                    Rs {currentTeam.cash}L
+          {/* DUAL WHEELS ARENA */}
+          <div className="relative flex-1 p-4 sm:p-6 overflow-y-auto space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center justify-center">
+              {/* WHEEL 1: KARACHI PROPERTY WHEEL */}
+              <div className="flex flex-col items-center p-4 rounded-2xl bg-[#0E0105] border border-[#ECC37A]/30 shadow-inner">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="w-4 h-4 text-[#ECC37A]" />
+                  <span className="text-xs font-mono uppercase tracking-widest font-bold text-[#F1CA7E]">
+                    Wheel 1: Karachi Property
                   </span>
+                </div>
+
+                <div className="relative w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] select-none">
+                  {/* Top Pointer */}
+                  <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-xl">
+                    <div className="w-4 h-6 bg-gradient-to-b from-[#FFF2CC] to-[#ECC37A] clip-polygon border border-[#47131C] shadow-lg flex items-center justify-center">
+                      <ArrowDown className="w-3.5 h-3.5 text-[#2A0812]" />
+                    </div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#ECC37A] border-2 border-[#140207] -mt-1" />
+                  </div>
+
+                  {/* SVG Property Wheel */}
+                  <svg
+                    viewBox="0 0 400 400"
+                    className="w-full h-full drop-shadow-2xl"
+                    style={{
+                      transform: `rotate(${propWheelRotation}deg)`,
+                      transition: isSpinning
+                        ? 'transform 4.4s cubic-bezier(0.12, 0.8, 0.18, 1)'
+                        : 'none'
+                    }}
+                  >
+                    <circle cx="200" cy="200" r="196" fill="#140207" stroke="#ECC37A" strokeWidth="6" />
+                    <circle cx="200" cy="200" r="189" fill="none" stroke="#701020" strokeWidth="4" />
+
+                    {properties.map((prop, idx) => {
+                      const startAngle = idx * propSliceAngle;
+                      const endAngle = (idx + 1) * propSliceAngle;
+                      const path = createSlicePath(200, 200, 185, startAngle, endAngle);
+                      const palette = PROP_SLICE_PALETTE[idx % PROP_SLICE_PALETTE.length];
+                      const midAngle = startAngle + propSliceAngle / 2;
+                      const textCoord = polarToCartesian(200, 200, 138, midAngle);
+                      const shortName = SHORT_PROPERTY_NAMES[prop.id] || prop.name;
+
+                      return (
+                        <g key={prop.id}>
+                          <path
+                            d={path}
+                            fill={palette.bg}
+                            stroke="#ECC37A"
+                            strokeWidth="0.8"
+                            strokeOpacity="0.5"
+                          />
+                          <g transform={`translate(${textCoord.x}, ${textCoord.y}) rotate(${midAngle + 90})`}>
+                            <text
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fill={palette.text}
+                              fontSize="7"
+                              fontWeight="700"
+                              fontFamily="sans-serif"
+                            >
+                              #{prop.id} {shortName.length > 12 ? shortName.slice(0, 10) + '..' : shortName}
+                            </text>
+                          </g>
+                        </g>
+                      );
+                    })}
+
+                    {/* Center Hub */}
+                    <circle cx="200" cy="200" r="40" fill="#1C050B" stroke="#ECC37A" strokeWidth="3" />
+                    <circle cx="200" cy="200" r="32" fill="#701020" stroke="#FFF2CC" strokeWidth="1.5" />
+                    <text
+                      x="200"
+                      y="196"
+                      textAnchor="middle"
+                      fill="#F1CA7E"
+                      fontSize="8"
+                      fontWeight="900"
+                      fontFamily="monospace"
+                      letterSpacing="1px"
+                    >
+                      KARACHI
+                    </text>
+                    <text
+                      x="200"
+                      y="207"
+                      textAnchor="middle"
+                      fill="#FFF"
+                      fontSize="7"
+                      fontWeight="700"
+                    >
+                      PROPERTY
+                    </text>
+                  </svg>
                 </div>
               </div>
 
-              {/* Error Message if any */}
-              {spinError && (
-                <div className="p-3 rounded-lg bg-[#3F0A12] border border-[#F87171] text-[#FECACA] text-xs font-mono flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-[#F87171] mt-0.5" />
-                  <span>{spinError}</span>
-                </div>
-              )}
-
-              {/* Live Outcome Banner */}
-              {outcome ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`p-4 rounded-xl border-2 space-y-3 ${
-                    outcome.status === 'PAID_RENT'
-                      ? 'bg-[#29070D] border-[#F87171]'
-                      : outcome.status === 'OWN_PROPERTY'
-                      ? 'bg-[#0B2516] border-[#4ADE80]'
-                      : 'bg-[#151D2A] border-[#60A5FA]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-white/70">
-                      Spin Result
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono ${
-                        outcome.status === 'PAID_RENT'
-                          ? 'bg-[#DC2626] text-white'
-                          : outcome.status === 'OWN_PROPERTY'
-                          ? 'bg-[#16A34A] text-white'
-                          : 'bg-[#2563EB] text-white'
-                      }`}
-                    >
-                      {outcome.status === 'PAID_RENT'
-                        ? 'Rent Deducted'
-                        : outcome.status === 'OWN_PROPERTY'
-                        ? 'Own Property'
-                        : 'Unclaimed Territory'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h5 className="text-sm font-bold text-white">
-                      #{outcome.propertyId} {outcome.propertyName}
-                    </h5>
-                    <p className="text-xs text-white/80 font-mono mt-0.5">
-                      {landedProp?.category || 'Karachi Sector'} | Zone {landedProp?.zone || 'Prime'}
-                    </p>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/10 space-y-1 font-mono text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Owner:</span>
-                      <strong className="text-white">
-                        {outcome.ownerTeamName || 'Unowned / State Property'}
-                      </strong>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Rent Amount:</span>
-                      <strong
-                        className={
-                          outcome.status === 'PAID_RENT' ? 'text-[#FCA5A5]' : 'text-[#86EFAC]'
-                        }
-                      >
-                        {outcome.status === 'PAID_RENT'
-                          ? `-Rs ${outcome.rentAmount} Lakh`
-                          : 'Rs 0 Lakh'}
-                      </strong>
-                    </div>
-
-                    <div className="flex justify-between pt-1 border-t border-white/10">
-                      <span className="text-white/70">New Cash:</span>
-                      <strong className="text-[#FDE047]">
-                        Rs {outcome.spinnerNewCash} Lakh
-                      </strong>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : isSpinning ? (
-                <div className="p-6 rounded-xl bg-[#1C050B] border border-[#ECC37A]/20 text-center space-y-2">
-                  <RotateCw className="w-6 h-6 animate-spin mx-auto text-[#ECC37A]" />
-                  <p className="text-xs font-mono text-[#F1CA7E]">
-                    Calculating outcome and broadcasting to classroom projector...
-                  </p>
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-[#1C050B]/60 border border-[#ECC37A]/20 text-center text-xs font-mono text-[#F1CA7E]/70">
-                  Click the green button to trigger the wheel spin. Outcome will display here and broadcast live on the classroom projector screen.
-                </div>
-              )}
-
-              {/* Waiting Teams Queue */}
-              {unspunTeams.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-[#ECC37A]/20">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#F1CA7E] block">
-                    Next Eligible Teams ({unspunTeams.length} Remaining):
+              {/* WHEEL 2: TEAM WHEEL (WHO PAYS RENT) */}
+              <div className="flex flex-col items-center p-4 rounded-2xl bg-[#0E0105] border border-[#ECC37A]/30 shadow-inner">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4 text-[#F1CA7E]" />
+                  <span className="text-xs font-mono uppercase tracking-widest font-bold text-[#F1CA7E]">
+                    Wheel 2: Team (Who Pays Rent)
                   </span>
-                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                    {unspunTeams.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        disabled={isSpinning}
-                        onClick={() => handleSelectNextTeam(t)}
-                        className="w-full text-left p-2 rounded-lg bg-[#1C050B] hover:bg-[#2A0812] border border-[#ECC37A]/20 hover:border-[#ECC37A]/60 flex items-center justify-between text-xs transition-colors cursor-pointer disabled:opacity-40"
-                      >
-                        <span className="font-bold text-[#F8EEE1]">{t.name}</span>
-                        <div className="flex items-center gap-1 text-[10px] font-mono text-[#F1CA7E]">
-                          <span>Rs {t.cash}L</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
                 </div>
-              )}
+
+                <div className="relative w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] select-none">
+                  {/* Top Pointer */}
+                  <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-xl">
+                    <div className="w-4 h-6 bg-gradient-to-b from-[#FFF2CC] to-[#ECC37A] clip-polygon border border-[#47131C] shadow-lg flex items-center justify-center">
+                      <ArrowDown className="w-3.5 h-3.5 text-[#2A0812]" />
+                    </div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#ECC37A] border-2 border-[#140207] -mt-1" />
+                  </div>
+
+                  {/* SVG Team Wheel */}
+                  <svg
+                    viewBox="0 0 400 400"
+                    className="w-full h-full drop-shadow-2xl"
+                    style={{
+                      transform: `rotate(${teamWheelRotation}deg)`,
+                      transition: isSpinning
+                        ? 'transform 5.0s cubic-bezier(0.1, 0.82, 0.2, 1)'
+                        : 'none'
+                    }}
+                  >
+                    <circle cx="200" cy="200" r="196" fill="#140207" stroke="#ECC37A" strokeWidth="6" />
+                    <circle cx="200" cy="200" r="189" fill="none" stroke="#2A0812" strokeWidth="4" />
+
+                    {totalTeamSlices === 1 ? (
+                      <circle cx="200" cy="200" r="185" fill={TEAM_SLICE_PALETTE[0].bg} />
+                    ) : (
+                      teams.map((t, idx) => {
+                        const startAngle = idx * teamSliceAngle;
+                        const endAngle = (idx + 1) * teamSliceAngle;
+                        const path = createSlicePath(200, 200, 185, startAngle, endAngle);
+                        const palette = TEAM_SLICE_PALETTE[idx % TEAM_SLICE_PALETTE.length];
+                        const midAngle = startAngle + teamSliceAngle / 2;
+                        const textCoord = polarToCartesian(200, 200, 126, midAngle);
+
+                        return (
+                          <g key={t.id}>
+                            <path
+                              d={path}
+                              fill={palette.bg}
+                              stroke="#ECC37A"
+                              strokeWidth="1.2"
+                              strokeOpacity="0.6"
+                            />
+                            <g transform={`translate(${textCoord.x}, ${textCoord.y}) rotate(${midAngle + 90})`}>
+                              <text
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fill={palette.text}
+                                fontSize={totalTeamSlices > 8 ? '8' : totalTeamSlices > 5 ? '9' : '11'}
+                                fontWeight="800"
+                                fontFamily="sans-serif"
+                              >
+                                {t.name.length > 11 ? t.name.slice(0, 10) + '..' : t.name}
+                              </text>
+                              <text
+                                y="11"
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                fill={palette.accent}
+                                fontSize="7.5"
+                                fontWeight="700"
+                                fontFamily="monospace"
+                              >
+                                Rs {t.cash}L
+                              </text>
+                            </g>
+                          </g>
+                        );
+                      })
+                    )}
+
+                    {/* Center Hub */}
+                    <circle cx="200" cy="200" r="40" fill="#1C050B" stroke="#ECC37A" strokeWidth="3" />
+                    <circle cx="200" cy="200" r="32" fill="#1E3A8A" stroke="#FFF2CC" strokeWidth="1.5" />
+                    <text
+                      x="200"
+                      y="196"
+                      textAnchor="middle"
+                      fill="#93C5FD"
+                      fontSize="8"
+                      fontWeight="900"
+                      fontFamily="monospace"
+                      letterSpacing="1px"
+                    >
+                      PAYER
+                    </text>
+                    <text
+                      x="200"
+                      y="207"
+                      textAnchor="middle"
+                      fill="#FFF"
+                      fontSize="7"
+                      fontWeight="700"
+                    >
+                      TEAM
+                    </text>
+                  </svg>
+                </div>
+              </div>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center gap-2 pt-3 border-t border-[#ECC37A]/20">
+            {/* Error Message if any */}
+            {spinError && (
+              <div className="p-3 rounded-xl bg-[#3F0A12] border border-[#F87171] text-[#FECACA] text-xs font-mono flex items-start gap-2 max-w-xl mx-auto">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#F87171] mt-0.5" />
+                <span>{spinError}</span>
+              </div>
+            )}
+
+            {/* IN-SPIN STATUS BANNER */}
+            {isSpinning && (
+              <div className="p-4 rounded-2xl bg-[#0E0105] border border-[#ECC37A]/30 text-center space-y-1.5 max-w-md mx-auto">
+                <RotateCw className="w-6 h-6 animate-spin mx-auto text-[#ECC37A]" />
+                <h4 className="text-sm font-bold font-serif text-[#F8EEE1]">
+                  Both Wheels Spinning Live...
+                </h4>
+                <p className="text-xs font-mono text-[#F1CA7E]/70">
+                  Selecting target property &amp; payer team randomly.
+                </p>
+              </div>
+            )}
+
+            {/* SLEEK POPUP DIALOG OF TEAM NAME AND PROPERTY */}
+            <AnimatePresence>
+              {outcome && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-30 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.88, y: 16 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                    className="w-full max-w-md bg-[#1C050B] border-2 border-[#ECC37A] rounded-2xl shadow-2xl p-6 text-center space-y-4"
+                  >
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#701020] border border-[#F1CA7E]/40 text-[#F1CA7E] text-[11px] font-mono font-bold uppercase tracking-wider">
+                      Wheel Outcome
+                    </div>
+
+                    {/* TEAM NAME (WHO WAS SPUN) */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#F1CA7E]/70 font-semibold block">
+                        Spun Team (Payer)
+                      </span>
+                      <h2 className="text-2xl sm:text-3xl font-black font-serif text-white tracking-tight">
+                        {outcome.teamName}
+                      </h2>
+                      <span className="text-xs font-mono text-[#F1CA7E] font-bold">
+                        Cash: Rs {outcome.spinnerNewCash}L
+                      </span>
+                    </div>
+
+                    <div className="w-12 h-0.5 bg-[#ECC37A]/30 mx-auto" />
+
+                    {/* LANDED PROPERTY */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#F1CA7E]/70 font-semibold block">
+                        Landed On Property
+                      </span>
+                      <h3 className="text-xl sm:text-2xl font-bold font-serif text-[#ECC37A] leading-tight">
+                        #{outcome.propertyId} {outcome.propertyName}
+                      </h3>
+                      <span className="text-xs font-mono text-[#F8EEE1]/70 block">
+                        Owner: <strong className="text-white">{outcome.ownerTeamName || 'Unowned / State Land'}</strong>
+                      </span>
+                    </div>
+
+                    {/* SETTLEMENT BADGE */}
+                    <div className={`p-3 rounded-xl border text-xs font-mono font-bold ${
+                      outcome.status === 'PAID_RENT'
+                        ? 'bg-[#3F0A12] border-[#F87171] text-[#FECACA]'
+                        : outcome.status === 'OWN_PROPERTY'
+                        ? 'bg-[#0E2E1D] border-[#22C55E] text-[#86EFAC]'
+                        : 'bg-[#151D2A] border-[#60A5FA] text-[#BFDBFE]'
+                    }`}>
+                      {outcome.status === 'PAID_RENT' ? (
+                        <div>
+                          <div className="text-sm font-black text-[#F87171]">-Rs {outcome.rentAmount} Lakh Rent Paid</div>
+                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
+                            Paid to {outcome.ownerTeamName}
+                          </div>
+                        </div>
+                      ) : outcome.status === 'OWN_PROPERTY' ? (
+                        <div>
+                          <div className="text-sm font-black text-[#4ADE80]">Rs 0 Rent (Own Property)</div>
+                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
+                            Safe on own territory
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-sm font-black text-[#60A5FA]">Rs 0 Rent (Unclaimed)</div>
+                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
+                            Unclaimed public territory
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ACTION BUTTONS IN POPUP */}
+                    <div className="flex items-center gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setOutcome(null)}
+                        className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-[#2A0812] hover:bg-[#3F0A1B] text-[#F8EEE1] border border-[#ECC37A]/40 transition-colors cursor-pointer"
+                      >
+                        View Wheels
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOutcome(null);
+                          handleStartSpin();
+                        }}
+                        className="flex-1 py-2.5 px-4 rounded-xl font-black text-xs uppercase tracking-wider bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-[#052E16] shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                        <span>Spin Next</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* BOTTOM ACTIONS BAR */}
+          <div className="p-4 sm:p-5 border-t border-[#ECC37A]/25 bg-[#1C050B] flex items-center justify-between gap-3">
+            <span className="text-xs font-mono text-[#F1CA7E]/80 hidden sm:inline">
+              Click &quot;Spin Dual Wheel&quot; to execute random property and team spin.
+            </span>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
               <button
                 type="button"
                 disabled={isSpinning}
                 onClick={onClose}
-                className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-[#2A0812] hover:bg-[#3F0A1B] text-[#F8EEE1] border border-[#ECC37A]/40 transition-colors disabled:opacity-40 cursor-pointer"
+                className="flex-1 sm:flex-initial py-3 px-5 rounded-xl font-bold text-xs bg-[#2A0812] hover:bg-[#3F0A1B] text-[#F8EEE1] border border-[#ECC37A]/40 transition-colors disabled:opacity-40 cursor-pointer"
               >
-                Done / Close
+                Close
               </button>
 
-              {outcome && unspunTeams.length > 0 && (
-                <button
-                  type="button"
-                  disabled={isSpinning}
-                  onClick={() => handleSelectNextTeam(unspunTeams[0])}
-                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs bg-[#ECC37A] hover:bg-[#F1CA7E] text-[#140207] transition-colors disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <span>Spin Next Team</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={isSpinning}
+                onClick={handleStartSpin}
+                className="flex-1 sm:flex-initial py-3 px-7 rounded-xl font-black text-sm uppercase tracking-wider bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-[#052E16] shadow-xl hover:shadow-2xl flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSpinning ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin text-[#052E16]" />
+                    <span>Wheels Spinning...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCw className="w-4 h-4 text-[#052E16]" />
+                    <span>Spin Dual Wheel (Property + Team)</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </motion.div>

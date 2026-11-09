@@ -564,7 +564,7 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
   };
 
   const [isSpinningWheelAdmin, setIsSpinningWheelAdmin] = useState(false);
-  const [selectedSpinTeamId, setSelectedSpinTeamId] = useState('');
+  const [isWheelModalOpen, setIsWheelModalOpen] = useState(false);
 
   const activeWave = Number(store?.currentWheelRound || 1);
   const unspunTeams = useMemo(() => {
@@ -572,28 +572,6 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     const waveSpins = store?.wheelSpinsByRound?.[activeWave] || {};
     return store.teams.filter((t) => !waveSpins[t.id]);
   }, [store?.teams, store?.wheelSpinsByRound, activeWave]);
-
-  // Keep selectedSpinTeamId in sync with unspun teams:
-  // When done, the team will not show in the selection and defaults to next unspun team
-  useEffect(() => {
-    if (unspunTeams.length > 0) {
-      if (!selectedSpinTeamId || !unspunTeams.some((t) => String(t.id) === String(selectedSpinTeamId))) {
-        setSelectedSpinTeamId(String(unspunTeams[0].id));
-      }
-    } else {
-      setSelectedSpinTeamId('');
-    }
-  }, [unspunTeams, selectedSpinTeamId]);
-
-  const [adminWheelModalTeam, setAdminWheelModalTeam] = useState(null);
-
-  const handleTriggerTeamSpin = (teamId) => {
-    if (!teamId) return;
-    const target = (store?.teams || []).find((t) => String(t.id) === String(teamId));
-    if (target) {
-      setAdminWheelModalTeam(target);
-    }
-  };
 
   const handleDeleteTeamSpin = async (teamId, teamName) => {
     if (!window.confirm(`Are you sure you want to delete ${teamName}'s spin for Wave #${activeWave}? This will reverse rent settlement and restore ${teamName} to the spin selection.`)) {
@@ -1839,15 +1817,15 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                   </div>
                 </div>
 
-                {/* Team Selector for Single Spin (Only unspun teams appear) */}
+                {/* Dual Wheel Spin Arena (No team selection: Wheel spins Property & Paying Team) */}
                 <div className="editorial-card p-6 bg-gradient-to-r from-[#1C050B] via-[#2A0812] to-[#140207] border-2 border-[#ECC37A] text-[#F8EEE1] shadow-2xl space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ECC37A]/30 pb-3">
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#F1CA7E] block">
-                        Live Spin Dispatcher
+                        Dual Wheel Arena
                       </span>
                       <h3 className="text-lg font-bold font-serif text-[#F8EEE1]">
-                        Select Team to Spin (Wave #{currentWheelRound})
+                        Wave #{currentWheelRound} Live Spin Arena
                       </h3>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1858,48 +1836,29 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                   </div>
 
                   {unspunTeams.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-                        <div className="flex-1">
-                          <label className="block text-xs font-mono uppercase text-[#F1CA7E] mb-1.5 font-bold">
-                            Choose Team (Done teams automatically disappear):
-                          </label>
-                          <select
-                            value={selectedSpinTeamId}
-                            onChange={(e) => setSelectedSpinTeamId(e.target.value)}
-                            disabled={isSpinningWheelAdmin}
-                            className="w-full bg-[#0D0104] text-[#F8EEE1] border-2 border-[#ECC37A]/60 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:border-[#F1CA7E]"
-                          >
-                            {unspunTeams.map((team) => (
-                              <option key={team.id} value={team.id} className="bg-[#18040B] text-[#F8EEE1]">
-                                {team.name} (Cash: Rs {team.cash}L)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                    <div className="space-y-4 py-2">
+                      <p className="text-xs text-[#F1CA7E]/90 leading-relaxed">
+                        The dual wheel randomly spins both the <strong>Karachi Property</strong> and the <strong>Paying Team</strong>. When settled, rent is automatically debited from the chosen team and credited to the property owner, displaying a celebratory result popup and broadcasting to the classroom projector.
+                      </p>
 
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                         <button
                           type="button"
-                          disabled={isSpinningWheelAdmin || !selectedSpinTeamId}
-                          onClick={() => handleTriggerTeamSpin(selectedSpinTeamId)}
-                          className="editorial-btn editorial-btn-green py-3 px-6 text-sm font-black flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 whitespace-nowrap"
+                          disabled={isSpinningWheelAdmin}
+                          onClick={() => setIsWheelModalOpen(true)}
+                          className="editorial-btn editorial-btn-green py-3.5 px-8 text-sm font-black flex items-center justify-center gap-2.5 shadow-xl hover:shadow-2xl disabled:opacity-50 cursor-pointer"
                         >
-                          {isSpinningWheelAdmin ? (
-                            'Spinning...'
-                          ) : (
-                            <>
-                              Spin Wheel for {unspunTeams.find(t => String(t.id) === String(selectedSpinTeamId))?.name || 'Selected Team'}
-                            </>
-                          )}
+                          <RotateCw className="w-4 h-4 text-[#052E16]" />
+                          <span>Open Dual Spin Wheel (Property &amp; Team)</span>
                         </button>
                       </div>
 
                       <p className="text-[11px] font-mono text-[#F1CA7E]/70">
-                        Notice: Once spun, this team is removed from the selection and broadcast to the classroom projector. Use &quot;Delete Spin&quot; below if you need to undo or re-queue.
+                        Notice: Unspun teams are selected by the Team Wheel. Once all teams have spun, advance to the next wave above.
                       </p>
                     </div>
                   ) : (
-                    <div className="py-4 text-center space-y-2">
+                    <div className="py-4 text-center space-y-3">
                       <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#0E2E1D] border border-[#22C55E]/50 text-[#86EFAC] text-xs font-mono font-bold">
                         <span>[Completed]</span> All {store.teams.length} teams have spun for Wave #{currentWheelRound}!
                       </div>
@@ -1967,20 +1926,12 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1.5 pt-1 border-t border-[#E4E4E7]/60">
-                                <button
-                                  type="button"
-                                  disabled={isSpinningWheelAdmin}
-                                  onClick={() => handleTriggerTeamSpin(team.id)}
-                                  className="flex-1 editorial-btn editorial-btn-outline text-[10px] py-1 px-2 font-bold hover:bg-[#701020] hover:text-white"
-                                >
-                                  Re-Spin
-                                </button>
+                              <div className="pt-1 border-t border-[#E4E4E7]/60">
                                 <button
                                   type="button"
                                   disabled={isSpinningWheelAdmin}
                                   onClick={() => handleDeleteTeamSpin(team.id, team.name)}
-                                  className="flex-1 editorial-btn text-[10px] py-1 px-2 font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors"
+                                  className="w-full editorial-btn text-[10px] py-1.5 px-2 font-bold text-[#DC2626] border border-[#FDA29B] bg-[#FEF3F2] hover:bg-[#DC2626] hover:text-white transition-colors cursor-pointer"
                                   title="Delete this spin and refund any rent paid"
                                 >
                                   Delete Spin
@@ -1990,16 +1941,9 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                           ) : (
                             <div className="pt-2 border-t border-[#E4E4E7] flex items-center justify-between">
                               <span className="text-[11px] font-mono text-[#71717A]">
-                                In queue
+                                Waiting for wheel spin
                               </span>
-                              <button
-                                type="button"
-                                disabled={isSpinningWheelAdmin}
-                                onClick={() => handleTriggerTeamSpin(team.id)}
-                                className="editorial-btn editorial-btn-outline text-[10px] py-1 px-2.5 font-bold hover:bg-[#701020] hover:text-white"
-                              >
-                                Spin Now
-                              </button>
+                              <span className="w-2 h-2 rounded-full bg-[#D97706] animate-pulse" />
                             </div>
                           )}
                         </div>
@@ -2230,12 +2174,11 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
         </div>
       </div>
 
-      {adminWheelModalTeam && (
+      {isWheelModalOpen && (
         <AdminSpinWheelModal
-          isOpen={Boolean(adminWheelModalTeam)}
-          onClose={() => setAdminWheelModalTeam(null)}
+          isOpen={isWheelModalOpen}
+          onClose={() => setIsWheelModalOpen(false)}
           store={store}
-          initialTeam={adminWheelModalTeam}
           onStoreUpdated={(fresh) => setStore(fresh)}
         />
       )}

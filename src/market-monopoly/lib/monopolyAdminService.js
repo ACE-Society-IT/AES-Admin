@@ -1262,7 +1262,7 @@ export async function toggleShowRankingsAdmin({ store, showRankings }) {
  * Automatically calculates random landed property, rent deduction and credit, and updates state.
  * @param {string|'ALL'} targetTeamId
  */
-export async function triggerWheelSpinAdmin({ teamId }) {
+export async function triggerWheelSpinAdmin({ teamId = '' } = {}) {
   if (supabase) {
     if (teamId === 'ALL' || teamId === 'ALL_UNSPUN') {
       const latest = await fetchMonopolyStore(true);
@@ -1283,7 +1283,7 @@ export async function triggerWheelSpinAdmin({ teamId }) {
     }
 
     const { data: res, error } = await supabase.rpc('monopoly_execute_wheel_spin', {
-      p_team_id: String(teamId),
+      p_team_id: teamId ? String(teamId) : '',
       p_property_id: 0
     });
     if (error) throw error;
