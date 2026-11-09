@@ -16,6 +16,7 @@ import {
   recordResourceBidWin,
   revokeResourceBid,
   releaseNextWheelSpinAdmin,
+  triggerWheelSpinAdmin,
   adjustTeamCashAdmin,
   addNewTeamAdmin,
   deleteTeamAdmin,
@@ -518,6 +519,35 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
       notify(updated.showRankings ? 'Rankings are now VISIBLE to participants.' : 'Rankings are now HIDDEN from participants.');
     } catch (err) {
       notify(err.message, 'err');
+    }
+  };
+
+  const [isSpinningWheelAdmin, setIsSpinningWheelAdmin] = useState(false);
+
+  const handleTriggerTeamSpin = async (teamId) => {
+    try {
+      setIsSpinningWheelAdmin(true);
+      const updated = await triggerWheelSpinAdmin({ teamId });
+      setStore(updated);
+      const team = updated.teams.find(t => String(t.id) === String(teamId));
+      notify(`Wheel spun for ${team?.name || 'team'}! Outcome broadcast to screen.`);
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setIsSpinningWheelAdmin(false);
+    }
+  };
+
+  const handleTriggerAllTeamsSpin = async () => {
+    try {
+      setIsSpinningWheelAdmin(true);
+      const updated = await triggerWheelSpinAdmin({ teamId: 'ALL' });
+      setStore(updated);
+      notify(`Wheel spun for ALL teams simultaneously! Outlines & rent deducted.`);
+    } catch (err) {
+      notify(err.message, 'err');
+    } finally {
+      setIsSpinningWheelAdmin(false);
     }
   };
 
@@ -1658,20 +1688,34 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                 <div className="editorial-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <span className="font-mono text-xs uppercase text-[#71717A] block">
-                      Active Wave
+                      Active Wave · Admin Controls
                     </span>
                     <h2 className="text-lg font-bold text-[#0F0F11]">
                       Wheel Spin #{currentWheelRound}
                     </h2>
+                    <p className="text-xs font-mono text-[#71717A] mt-1">
+                      Click below to spin the wheel for each team individually or for all teams at once. Results pop up live on team devices & the Classroom Projector!
+                    </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleReleaseNextWheelSpin}
-                    className="editorial-btn editorial-btn-dark py-2.5 px-5 text-xs font-bold"
-                  >
-                    Release Spin #{currentWheelRound + 1}
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={isSpinningWheelAdmin}
+                      onClick={handleTriggerAllTeamsSpin}
+                      className="editorial-btn editorial-btn-green py-2.5 px-5 text-xs font-bold disabled:opacity-50"
+                    >
+                      {isSpinningWheelAdmin ? 'Spinning...' : '⚡ Spin for ALL Teams'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleReleaseNextWheelSpin}
+                      className="editorial-btn editorial-btn-dark py-2.5 px-4 text-xs font-bold"
+                    >
+                      Advance to Wave #{currentWheelRound + 1}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Team Spin Results for Current Wave */}
@@ -1682,15 +1726,25 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                       <div key={team.id} className="editorial-card p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <strong className="text-xs text-[#0F0F11]">{team.name}</strong>
-                          <span
-                            className={`editorial-badge text-[10px] ${
-                              spinRecord
-                                ? 'bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5]'
-                                : ''
-                            }`}
-                          >
-                            {spinRecord ? 'Spun' : 'Waiting'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`editorial-badge text-[10px] ${
+                                spinRecord
+                                  ? 'bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5]'
+                                  : ''
+                              }`}
+                            >
+                              {spinRecord ? 'Spun' : 'Waiting'}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={isSpinningWheelAdmin}
+                              onClick={() => handleTriggerTeamSpin(team.id)}
+                              className="editorial-btn editorial-btn-outline text-[10px] py-0.5 px-2 font-bold hover:bg-[#701020] hover:text-white"
+                            >
+                              {spinRecord ? 'Re-Spin' : 'Spin Wheel'}
+                            </button>
+                          </div>
                         </div>
                         {spinRecord ? (
                           <div className="text-xs font-mono text-[#71717A] space-y-0.5">

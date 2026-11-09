@@ -1053,3 +1053,123 @@ export async function toggleShowRankingsAdmin({ store, showRankings }) {
     updatedAt: Date.now()
   });
 }
+
+
+/**
+ * Admin: Trigger Wheel Spin for a specific team (or all teams).
+ * Automatically calculates random landed property, rent deduction and credit, and updates state.
+ * @param {string|'ALL'} targetTeamId
+ */
+export async function triggerWheelSpinAdmin({ teamId }) {
+  const latest = await fetchMonopolyStore();
+  const currentWave = Number(latest.currentWheelRound || 1);
+  const properties = latest.properties || [];
+  if (properties.length === 0) throw new Error("No properties available on grid.");
+
+  const teamsToSpin = teamId === 'ALL'
+    ? latest.teams
+    : latest.teams.filter((t) => String(t.id) === String(teamId));
+
+  if (teamsToSpin.length === 0) throw new Error("No eligible teams found to spin.");
+
+  let nextTeams = [...latest.teams];
+  let nextWheelSpinsByRound = { ...(latest.wheelSpinsByRound || {}) };
+  let currentRoundSpins = { ...(nextWheelSpinsByRound[currentWave] || {}) };
+  let newTransactions = [];
+  let lastOutcome = null;
+
+  for (const team of teamsToSpin) {
+    // Pick random property
+    const randIdx = Math.floor(Math.random() * properties.length);
+    const landedProp = properties[randIdx];
+
+    // Compute Rent
+    const rentAmount = computePropertyRent(landedProp);
+    const isOwnedBySpinner = landedProp.ownerTeamId && String(landedProp.ownerTeamId) === String(team.id);
+    const isUnowned = !landedProp.ownerTeamId;
+    const ownerTeam = !isUnowned && !isOwnedBySpinner
+      ? nextTeams.find((t) => String(t.id) === String(landedProp.ownerTeamId))
+      : null;
+
+    let spinStatus = 'UNOWNED';
+    let payerCashDelta = 0;
+    let ownerCashDelta = 0;
+
+    if (isOwnedBySpinner) {
+      spinStatus = 'OWN_PROPERTY';
+    } else if (ownerTeam) {
+      spinStatus = 'PAID_RENT';
+      payerCashDelta = -rentAmount;
+      ownerCashDelta = rentAmount;
+    }
+
+    // Update balances
+    nextTeams = nextTeams.map((t) => {
+      if (String(t.id) === String(team.id)) {
+        return { ...t, cash: Number((t.cash + payerCashDelta).toFixed(2)) };
+      }
+      if (ownerTeam && String(t.id) === String(ownerTeam.id)) {
+        return { ...t, cash: Number((t.cash + ownerCashDelta).toFixed(2)) };
+      }
+      return t;
+    });
+
+    const spinOutcome = {
+      teamId: team.id,
+      teamName: team.name,
+      propertyId: landedProp.id,
+      propertyName: landedProp.name,
+      propertyCategory: landedProp.category,
+      ownerTeamId: landedProp.ownerTeamId || null,
+      ownerTeamName: landedProp.ownerTeamName || 'Unowned',
+      rentAmount: spinStatus === 'PAID_RENT' ? rentAmount : 0,
+      status: spinStatus,
+      wheelRound: currentWave,
+      timestamp: new Date().toISOString(),
+      nonce: Math.random().toString(36).slice(2, 7)
+    };
+
+    currentRoundSpins[team.id] = spinOutcome;
+    lastOutcome = spinOutcome;
+
+    // Transaction
+    const tx = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type: 'WHEEL_SPIN_RENT',
+      teamId: team.id,
+      teamName: team.name,
+      propertyId: landedProp.id,
+      propertyName: landedProp.name,
+      amount: spinStatus === 'PAID_RENT' ? rentAmount : 0,
+      note: spinStatus === 'PAID_RENT'
+        ? `${team.name} spun wheel -> ${landedProp.name}: Paid Rs ${rentAmount}L rent to ${ownerTeam?.name || 'Owner'}`
+        : spinStatus === 'OWN_PROPERTY'
+        ? `${team.name} spun wheel -> ${landedProp.name} (Own Property - No Rent)`
+        : `${team.name} spun wheel -> ${landedProp.name} (Unowned Land - No Rent)`,
+      createdAt: new Date().toISOString()
+    };
+    newTransactions.push(tx);
+
+    await supabase.from('monopoly_transactions').upsert({
+      id: tx.id,
+      type: tx.type,
+      team_id: tx.teamId,
+      team_name: tx.teamName,
+      property_id: tx.propertyId,
+      property_name: tx.propertyName,
+      amount: tx.amount,
+      note: tx.note,
+      created_at: tx.createdAt
+    });
+  }
+
+  nextWheelSpinsByRound[currentWave] = currentRoundSpins;
+
+  return persistMonopolyStore({
+    ...latest,
+    teams: nextTeams,
+    wheelSpinsByRound: nextWheelSpinsByRound,
+    lastWheelResult: lastOutcome,
+    transactions: [...newTransactions, ...(latest.transactions || [])]
+  });
+}
