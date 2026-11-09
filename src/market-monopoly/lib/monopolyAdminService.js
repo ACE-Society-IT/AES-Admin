@@ -134,93 +134,115 @@ export function hydrateMonopolyState(rawState) {
 // Local in-memory caching to optimize Admin response times and avoid duplicate round-trips
 let _adminCachedStore = null;
 let _adminCachedAt = 0;
-const ADMIN_CACHE_TTL_MS = 1000;
+let _adminActivePromise = null;
+const ADMIN_CACHE_TTL_MS = 3500;
 
 export function invalidateAdminMonopolyCache() {
   _adminCachedStore = null;
   _adminCachedAt = 0;
+  _adminActivePromise = null;
+}
+
+export function updateCachedAdminMonopolyStore(rawState) {
+  if (!rawState || typeof rawState !== 'object') return null;
+  const hydrated = hydrateMonopolyState(rawState);
+  _adminCachedStore = hydrated;
+  _adminCachedAt = Date.now();
+  return hydrated;
 }
 
 export async function fetchMonopolyStore(forceFresh = false) {
   if (!forceFresh && _adminCachedStore && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
     return _adminCachedStore;
   }
-
-  const [stateRes, teamsRes, propsRes] = await Promise.all([
-    supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
-    supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true }),
-    supabase.from('monopoly_properties').select('*').order('id', { ascending: true })
-  ]);
-
-  if (stateRes.error) {
-    throw new Error(`Supabase fetchMonopolyStore error: ${stateRes.error.message}`);
+  if (!forceFresh && _adminActivePromise) {
+    return _adminActivePromise;
   }
 
-  const dbTeams = Array.isArray(teamsRes.data)
-    ? teamsRes.data.map((row) => ({
-        id: String(row.id),
-        name: row.name,
-        username: (row.username || row.name || '').toLowerCase().replace(/\s+/g, '_'),
-        passcode: String(row.passcode || '1234'),
-        cash: Number(row.cash ?? row.starting_budget ?? STARTING_BUDGET_LAKH),
-        startingBudget: Number(row.starting_budget ?? STARTING_BUDGET_LAKH),
-        ownedResources: Array.isArray(row.owned_resources) ? row.owned_resources : []
-      }))
-    : null;
+  const runFetch = async () => {
+    try {
+      const [stateRes, teamsRes, propsRes] = await Promise.all([
+        supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
+        supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true }),
+        supabase.from('monopoly_properties').select('*').order('id', { ascending: true })
+      ]);
 
-  let result;
-  if (stateRes.data?.state_json && typeof stateRes.data.state_json === 'object') {
-    const raw = { ...stateRes.data.state_json };
-    // Authoritative teams list comes from monopoly_teams table if available, otherwise raw.teams
-    if (dbTeams !== null) {
-      raw.teams = dbTeams;
-    } else if (!Array.isArray(raw.teams)) {
-      raw.teams = [];
-    }
-
-    // Authoritative properties ownership & level come from monopoly_properties table
-    if (Array.isArray(propsRes?.data) && propsRes.data.length > 0) {
-      const dbPropMap = new Map();
-      propsRes.data.forEach((p) => dbPropMap.set(Number(p.id), p));
-
-      const teamNameMap = new Map();
-      if (Array.isArray(raw.teams)) {
-        raw.teams.forEach((t) => teamNameMap.set(String(t.id), t.name));
+      if (stateRes.error) {
+        throw new Error(`Supabase fetchMonopolyStore error: ${stateRes.error.message}`);
       }
 
-      if (Array.isArray(raw.properties) && raw.properties.length > 0) {
-        raw.properties = raw.properties.map((p) => {
-          const dbRow = dbPropMap.get(Number(p.id));
-          if (!dbRow) return p;
-          const ownerId = dbRow.owner_team_id || null;
-          const ownerName = ownerId ? teamNameMap.get(String(ownerId)) || p.ownerTeamName || null : null;
-          return {
-            ...p,
-            ownerTeamId: ownerId,
-            ownerTeamName: ownerName,
-            purchasePrice: Number(dbRow.purchase_price ?? p.purchasePrice ?? 0),
-            upgradeLevel: Math.min(3, Math.max(0, Number(dbRow.upgrade_level ?? p.upgradeLevel ?? 0))),
-            attachedUtilities: Array.isArray(dbRow.attached_utilities) ? dbRow.attached_utilities : (p.attachedUtilities || []),
-            openingValue: Number(dbRow.opening_value ?? p.openingValue ?? 100),
-            level3Target: Number(dbRow.level3_target ?? p.level3Target ?? 160)
-          };
-        });
+      const dbTeams = Array.isArray(teamsRes.data)
+        ? teamsRes.data.map((row) => ({
+            id: String(row.id),
+            name: row.name,
+            username: (row.username || row.name || '').toLowerCase().replace(/\s+/g, '_'),
+            passcode: String(row.passcode || '1234'),
+            cash: Number(row.cash ?? row.starting_budget ?? STARTING_BUDGET_LAKH),
+            startingBudget: Number(row.starting_budget ?? STARTING_BUDGET_LAKH),
+            ownedResources: Array.isArray(row.owned_resources) ? row.owned_resources : []
+          }))
+        : null;
+
+      let result;
+      if (stateRes.data?.state_json && typeof stateRes.data.state_json === 'object') {
+        const raw = { ...stateRes.data.state_json };
+        // Authoritative teams list comes from monopoly_teams table if available, otherwise raw.teams
+        if (dbTeams !== null) {
+          raw.teams = dbTeams;
+        } else if (!Array.isArray(raw.teams)) {
+          raw.teams = [];
+        }
+
+        // Authoritative properties ownership & level come from monopoly_properties table
+        if (Array.isArray(propsRes?.data) && propsRes.data.length > 0) {
+          const dbPropMap = new Map();
+          propsRes.data.forEach((p) => dbPropMap.set(Number(p.id), p));
+
+          const teamNameMap = new Map();
+          if (Array.isArray(raw.teams)) {
+            raw.teams.forEach((t) => teamNameMap.set(String(t.id), t.name));
+          }
+
+          if (Array.isArray(raw.properties) && raw.properties.length > 0) {
+            raw.properties = raw.properties.map((p) => {
+              const dbRow = dbPropMap.get(Number(p.id));
+              if (!dbRow) return p;
+              const ownerId = dbRow.owner_team_id || null;
+              const ownerName = ownerId ? teamNameMap.get(String(ownerId)) || p.ownerTeamName || null : null;
+              return {
+                ...p,
+                ownerTeamId: ownerId,
+                ownerTeamName: ownerName,
+                purchasePrice: Number(dbRow.purchase_price ?? p.purchasePrice ?? 0),
+                upgradeLevel: Math.min(3, Math.max(0, Number(dbRow.upgrade_level ?? p.upgradeLevel ?? 0))),
+                attachedUtilities: Array.isArray(dbRow.attached_utilities) ? dbRow.attached_utilities : (p.attachedUtilities || []),
+                openingValue: Number(dbRow.opening_value ?? p.openingValue ?? 100),
+                level3Target: Number(dbRow.level3_target ?? p.level3Target ?? 160)
+              };
+            });
+          }
+        }
+
+        result = hydrateMonopolyState(raw);
+      } else {
+        const initial = getInitialStore();
+        if (dbTeams && dbTeams.length > 0) {
+          initial.teams = dbTeams;
+        }
+        await persistMonopolyStore(initial);
+        result = initial;
       }
-    }
 
-    result = hydrateMonopolyState(raw);
-  } else {
-    const initial = getInitialStore();
-    if (dbTeams && dbTeams.length > 0) {
-      initial.teams = dbTeams;
+      _adminCachedStore = result;
+      _adminCachedAt = Date.now();
+      return result;
+    } finally {
+      _adminActivePromise = null;
     }
-    await persistMonopolyStore(initial);
-    result = initial;
-  }
+  };
 
-  _adminCachedStore = result;
-  _adminCachedAt = Date.now();
-  return result;
+  _adminActivePromise = runFetch();
+  return _adminActivePromise;
 }
 
 export async function persistMonopolyStore(nextStore) {

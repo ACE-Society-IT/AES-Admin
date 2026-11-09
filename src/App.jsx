@@ -275,12 +275,26 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
     if (isAuthenticated) {
       fetchTelemetry();
       fetchPasskeys();
+
+      const handleVisibility = () => {
+        if (!document.hidden) {
+          fetchTelemetry();
+        }
+      };
+      window.addEventListener('focus', handleVisibility);
+      document.addEventListener('visibilitychange', handleVisibility);
+
       const interval = setInterval(() => {
         if (!document.hidden) {
           fetchTelemetry();
         }
-      }, 5000);
-      return () => clearInterval(interval);
+      }, 25000);
+
+      return () => {
+        window.removeEventListener('focus', handleVisibility);
+        document.removeEventListener('visibilitychange', handleVisibility);
+        clearInterval(interval);
+      };
     }
   }, [isAuthenticated, fetchTelemetry, fetchPasskeys]);
 

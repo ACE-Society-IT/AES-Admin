@@ -8,6 +8,7 @@ import {
 } from '../data/monopolyData.js';
 import {
   fetchMonopolyStore,
+  updateCachedAdminMonopolyStore,
   persistMonopolyStore,
   recordAuctionWin,
   assignMultiplePropertiesToTeam,
@@ -216,7 +217,15 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'monopoly_state', filter: 'id=eq.1' },
-        () => {
+        (payload) => {
+          if (payload?.new?.state_json) {
+            const updated = updateCachedAdminMonopolyStore(payload.new.state_json);
+            if (updated) {
+              setStore(updated);
+              setStoreError(null);
+              return;
+            }
+          }
           refreshStore(true);
         }
       )
@@ -236,14 +245,24 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
       )
       .subscribe();
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshStore(false);
+      }
+    };
+    window.addEventListener('focus', handleVisibility);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     const pollInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshStore(false);
       }
-    }, 4000);
+    }, 20000);
 
     return () => {
       supabase.removeChannel(sub);
+      window.removeEventListener('focus', handleVisibility);
+      document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(pollInterval);
     };
   }, [refreshStore]);

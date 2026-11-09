@@ -103,18 +103,24 @@ export function GameProvider({ children }) {
       console.warn('[Admin GameContext] Realtime subscription error:', err.message);
     }
 
-    const handleFocus = () => fetchLatestState();
+    const handleFocus = () => {
+      if (!document.hidden) {
+        fetchLatestState();
+      }
+    };
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
 
     const pollInterval = setInterval(() => {
       if (!document.hidden) {
         fetchLatestState();
       }
-    }, 4000);
+    }, 20000);
 
     return () => {
       if (channel) supabase.removeChannel(channel);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
       clearInterval(pollInterval);
     };
   }, [fetchLatestState]);

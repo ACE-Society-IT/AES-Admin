@@ -14,18 +14,53 @@ function formatDbError(err, fallbackMsg = 'Database operation failed') {
   return new Error(msg || fallbackMsg);
 }
 
+let _adminGameStateCache = null;
+let _adminGameStateCachedAt = 0;
+let _adminGameStatePromise = null;
+let _adminTeamsCache = null;
+let _adminTeamsCachedAt = 0;
+let _adminTeamsPromise = null;
+const CACHE_TTL_MS = 2500;
+
+export function invalidateAdminStateCache() {
+  _adminGameStateCache = null;
+  _adminGameStateCachedAt = 0;
+  _adminGameStatePromise = null;
+  _adminTeamsCache = null;
+  _adminTeamsCachedAt = 0;
+  _adminTeamsPromise = null;
+}
+
 /**
  * Fetch authoritative game state directly from Supabase
  */
-export async function fetchGameStateDirect() {
-  const { data, error } = await supabase
-    .from('investomania_state')
-    .select('state_json')
-    .eq('id', 1)
-    .single();
+export async function fetchGameStateDirect(forceFresh = false) {
+  if (!forceFresh && _adminGameStateCache && Date.now() - _adminGameStateCachedAt < CACHE_TTL_MS) {
+    return _adminGameStateCache;
+  }
+  if (!forceFresh && _adminGameStatePromise) {
+    return _adminGameStatePromise;
+  }
 
-  if (error) throw formatDbError(error, 'Failed to fetch game floor state');
-  return data?.state_json || null;
+  const run = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('investomania_state')
+        .select('state_json')
+        .eq('id', 1)
+        .single();
+
+      if (error) throw formatDbError(error, 'Failed to fetch game floor state');
+      _adminGameStateCache = data?.state_json || null;
+      _adminGameStateCachedAt = Date.now();
+      return _adminGameStateCache;
+    } finally {
+      _adminGameStatePromise = null;
+    }
+  };
+
+  _adminGameStatePromise = run();
+  return _adminGameStatePromise;
 }
 
 /**
@@ -53,6 +88,7 @@ export async function phaseActionDirect(passkey, action, params = {}) {
 
   if (error) throw formatDbError(error, `Failed to execute ${action}`);
   if (!data?.ok) throw new Error(data?.error || `Floor action ${action} failed`);
+  invalidateAdminStateCache();
   return data.data;
 }
 
@@ -68,6 +104,7 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
 
   if (error) throw formatDbError(error, `Team operation ${action} failed`);
   if (!data?.ok) throw new Error(data?.error || 'Team operation failed');
+  invalidateAdminStateCache();
   return data.data;
 }
 
@@ -83,6 +120,7 @@ export async function manageStockDirect(passkey, action, stockData = {}) {
 
   if (error) throw formatDbError(error, `Stock operation ${action} failed`);
   if (!data?.ok) throw new Error(data?.error || 'Stock operation failed');
+  invalidateAdminStateCache();
   return data.data;
 }
 
@@ -361,29 +399,49 @@ export async function managePasskeyDirect(callerPasskey, action, targetPasskey =
 /**
  * Fetch all registered competitor desks directly from Supabase
  */
-export async function fetchTeamsDirect() {
-  const { data, error } = await supabase
-    .from('investomania_teams')
-    .select('*')
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.warn('Error querying investomania_teams:', error);
-    return [];
+export async function fetchTeamsDirect(forceFresh = false) {
+  if (!forceFresh && _adminTeamsCache && Date.now() - _adminTeamsCachedAt < CACHE_TTL_MS) {
+    return _adminTeamsCache;
+  }
+  if (!forceFresh && _adminTeamsPromise) {
+    return _adminTeamsPromise;
   }
 
-  return (data || []).map((t) => ({
-    id: t.id,
-    name: t.name || t.id,
-    passcode: t.passcode,
-    cash: Number(t.cash || 0),
-    initialBudget: Number(t.initial_budget || t.cash || 100000),
-    holdings: t.holdings || {},
-    isBanned: !!t.is_banned,
-    round1Profit: Number(t.round1_profit || 0),
-    round2Profit: Number(t.round2_profit || 0),
-    taxDeducted: Number(t.tax_deducted || 0),
-    taxShielded: Number(t.tax_shielded || 0),
-    updatedAt: t.updated_at
-  }));
+  const run = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('investomania_teams')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.warn('Error querying investomania_teams:', error);
+        return [];
+      }
+
+      const mapped = (data || []).map((t) => ({
+        id: t.id,
+        name: t.name || t.id,
+        passcode: t.passcode,
+        cash: Number(t.cash || 0),
+        initialBudget: Number(t.initial_budget || t.cash || 100000),
+        holdings: t.holdings || {},
+        isBanned: !!t.is_banned,
+        round1Profit: Number(t.round1_profit || 0),
+        round2Profit: Number(t.round2_profit || 0),
+        taxDeducted: Number(t.tax_deducted || 0),
+        taxShielded: Number(t.tax_shielded || 0),
+        updatedAt: t.updated_at
+      }));
+
+      _adminTeamsCache = mapped;
+      _adminTeamsCachedAt = Date.now();
+      return mapped;
+    } finally {
+      _adminTeamsPromise = null;
+    }
+  };
+
+  _adminTeamsPromise = run();
+  return _adminTeamsPromise;
 }

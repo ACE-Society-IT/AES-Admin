@@ -243,14 +243,24 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
       console.warn('Admin realtime subscription warning:', e);
     }
 
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        fetchAdminOverview();
+      }
+    };
+    window.addEventListener('focus', handleVisibility);
+    document.addEventListener('visibilitychange', handleVisibility);
+
     const poll = setInterval(() => {
       if (!document.hidden) {
         fetchAdminOverview();
       }
-    }, 5000);
+    }, 20000);
 
     return () => {
       if (channel) supabase.removeChannel(channel);
+      window.removeEventListener('focus', handleVisibility);
+      document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(poll);
     };
   }, []);
