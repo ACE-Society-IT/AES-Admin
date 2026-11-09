@@ -96,7 +96,7 @@ function AdminPropertySvgBanner({ category = 'Residential', level = 0 }) {
   );
 }
 
-export default function MonopolyAdminPanel({ onBackToHub }) {
+export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -778,6 +778,17 @@ export default function MonopolyAdminPanel({ onBackToHub }) {
                 className="editorial-btn editorial-btn-outline text-[#B42318] text-xs py-2 px-3 font-semibold"
               >
                 Reset
+              </button>
+            )}
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="editorial-btn editorial-btn-outline text-[#B42318] hover:bg-[#FEF3F2] dark:hover:bg-[#2E0C16] text-xs py-2 px-3 font-semibold transition-colors"
+                title="Sign out of administrator console"
+              >
+                Sign Out
               </button>
             )}
           </div>

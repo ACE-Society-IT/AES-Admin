@@ -35,7 +35,7 @@ import { DEFAULT_TAX_HAVENS } from './constants/taxHavens.js';
 import investomaniaLogo from '../assets/InvestomaniaLogo.png';
 import aesLogo from '../assets/aes-logo.png';
 
-export default function AdminPanel({ onBackToHub }) {
+export default function AdminPanel({ onBackToHub, onLogout }) {
   const { gameState } = useGame();
   
   // Mobile/Tablet Sidebar Window (Modal Drawer) state
@@ -958,7 +958,7 @@ export default function AdminPanel({ onBackToHub }) {
                   : 'Click to open/reveal live podium results on projector screen'
               }
             >
-              {gameState?.isResultsRevealed ? '🔒 Close Projector Results' : '🏆 Open Projector Results'}
+              {gameState?.isResultsRevealed ? 'Close Projector Results' : 'Open Projector Results'}
             </button>
 
             {/* Reset Game Button */}
@@ -969,6 +969,18 @@ export default function AdminPanel({ onBackToHub }) {
             >
               Reset Game
             </button>
+
+            {/* Sign Out Button */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="editorial-btn editorial-btn-outline text-[#B42318] hover:bg-[#FEF3F2] dark:hover:bg-[#2E0C16] text-xs py-2 px-3 font-semibold transition-colors"
+                title="Sign out of administrator console"
+              >
+                Sign Out
+              </button>
+            )}
           </div>
         </header>
 

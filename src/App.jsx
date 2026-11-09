@@ -204,8 +204,9 @@ const STYLES = `
   }
 `;
 
-function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey }) {
+function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogout, passkey, setPasskey }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [telemetry, setTelemetry] = useState(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -306,6 +307,12 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
         setPasskey(''); // Security: clear passkey from memory/input
         setIsAuthenticated(true);
         setLoginError('');
+
+        // Redirect to intended route if user was redirected to login from a protected module
+        const destination = location.state?.from?.pathname;
+        if (destination && destination !== '/') {
+          navigate(destination, { replace: true });
+        }
       } else {
         setLoginError('Invalid administrator credentials. Access denied.');
       }
@@ -318,10 +325,17 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
 
   // Robust Sign-Out Handler
   const handleLogout = () => {
-    sessionStorage.clear();
-    try { localStorage.clear(); } catch {}
-    setPasskey('');
-    setIsAuthenticated(false);
+    if (onLogout) {
+      onLogout();
+    } else {
+      sessionStorage.removeItem('alphaace_admin_token');
+      sessionStorage.removeItem('alphaace_admin_passkey');
+      localStorage.removeItem('alphaace_admin_token');
+      localStorage.removeItem('alphaace_admin_passkey');
+      try { sessionStorage.clear(); } catch {}
+      setPasskey('');
+      setIsAuthenticated(false);
+    }
     setShowCredModal(false);
   };
 
@@ -392,6 +406,28 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
     setCopiedKey(text);
     setTimeout(() => setCopiedKey(null), 2000);
   };
+
+  // Authorization verification gate while checking stored session
+  if (isCheckingAuth) {
+    return (
+      <div className="admin-executive-hub min-h-screen flex items-center justify-center p-6" data-theme={themeMode}>
+        <style>{STYLES}</style>
+        <div className="admin-card max-w-sm w-full p-8 text-center space-y-4">
+          <div className="w-10 h-10 mx-auto rounded-lg flex items-center justify-center" style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}>
+            <Activity className="w-5 h-5 animate-spin" style={{ color: 'var(--brown-primary)' }} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+              Verifying Authorization
+            </h2>
+            <p className="text-xs font-mono mt-1" style={{ color: 'var(--ink-gray)' }}>
+              Authenticating administrator credentials...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Dedicated Admin Authentication Gate
   if (!isAuthenticated) {
@@ -922,14 +958,14 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, passkey, setPasskey })
   );
 }
 
-function InvestomaniaAdminRoute() {
+function InvestomaniaAdminRoute({ onLogout }) {
   const navigate = useNavigate();
 
   return (
     <GameProvider>
       <div className="w-full min-h-screen">
         <Suspense fallback={<AdminModuleFallback title="Connecting to Investomania Engine..." />}>
-          <AdminPanel onBackToHub={() => navigate('/')} />
+          <AdminPanel onBackToHub={() => navigate('/')} onLogout={onLogout} />
         </Suspense>
       </div>
     </GameProvider>
@@ -965,22 +1001,56 @@ function PlaceholderModuleView({ name }) {
   );
 }
 
-function DefendAdminRoute() {
+function DefendAdminRoute({ onLogout }) {
   const navigate = useNavigate();
   return (
     <Suspense fallback={<AdminModuleFallback title="Connecting to War Room Command..." />}>
-      <AdminDashboardShell onBackToHub={() => navigate('/')} />
+      <AdminDashboardShell onBackToHub={() => navigate('/')} onLogout={onLogout} />
     </Suspense>
   );
 }
 
-function MonopolyAdminRoute() {
+function MonopolyAdminRoute({ onLogout }) {
   const navigate = useNavigate();
   return (
     <Suspense fallback={<AdminModuleFallback title="Opening Market Monopoly Admin..." />}>
-      <MonopolyAdminPanel onBackToHub={() => navigate('/')} />
+      <MonopolyAdminPanel onBackToHub={() => navigate('/')} onLogout={onLogout} />
     </Suspense>
   );
+}
+
+function AdminProtectedRoute({ isAuthenticated, isCheckingAuth, children }) {
+  const location = useLocation();
+
+  if (isCheckingAuth) {
+    return (
+      <div className="admin-executive-hub min-h-screen flex items-center justify-center p-6 bg-[#0C0A09] text-[#F9F8F6]">
+        <style>{STYLES}</style>
+        <div className="admin-card max-w-sm w-full p-8 text-center space-y-4">
+          <div
+            className="w-10 h-10 mx-auto rounded-lg flex items-center justify-center"
+            style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+          >
+            <Activity className="w-5 h-5 animate-spin" style={{ color: 'var(--brown-primary)' }} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+              Verifying Authorization
+            </h2>
+            <p className="text-xs font-mono mt-1" style={{ color: 'var(--ink-gray)' }}>
+              Authenticating administrator credentials...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/" state={{ from: location }} replace />;
+  }
+
+  return children;
 }
 
 function AdminPageTitleSync() {
@@ -1064,14 +1134,66 @@ class AdminErrorBoundary extends React.Component {
 export default function App() {
   // Passkey always starts empty so credentials are never pre-filled or visible
   const [passkey, setPasskey] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!(
-      localStorage.getItem('alphaace_admin_token') ||
-      sessionStorage.getItem('alphaace_admin_token') ||
-      localStorage.getItem('alphaace_admin_passkey') ||
-      sessionStorage.getItem('alphaace_admin_passkey')
-    );
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  const handleLogout = useCallback(() => {
+    try {
+      sessionStorage.removeItem('alphaace_admin_token');
+      sessionStorage.removeItem('alphaace_admin_passkey');
+      localStorage.removeItem('alphaace_admin_token');
+      localStorage.removeItem('alphaace_admin_passkey');
+      sessionStorage.clear();
+      localStorage.removeItem('alphaace_admin_token');
+      localStorage.removeItem('alphaace_admin_passkey');
+    } catch {}
+    setPasskey('');
+    setIsAuthenticated(false);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const verifyActiveSession = async () => {
+      const storedToken =
+        sessionStorage.getItem('alphaace_admin_token') ||
+        sessionStorage.getItem('alphaace_admin_passkey') ||
+        localStorage.getItem('alphaace_admin_token') ||
+        localStorage.getItem('alphaace_admin_passkey');
+
+      if (!storedToken || !storedToken.trim()) {
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setIsCheckingAuth(false);
+        }
+        return;
+      }
+
+      try {
+        const authData = await authAdminDirect(storedToken.trim());
+        if (isMounted) {
+          if (authData && authData.authenticated) {
+            setIsAuthenticated(true);
+          } else {
+            handleLogout();
+          }
+          setIsCheckingAuth(false);
+        }
+      } catch (err) {
+        console.warn('Admin token validation error:', err);
+        if (isMounted) {
+          handleLogout();
+          setIsCheckingAuth(false);
+        }
+      }
+    };
+
+    verifyActiveSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [handleLogout]);
 
   return (
     <AdminErrorBoundary>
@@ -1084,16 +1206,61 @@ export default function App() {
               <MasterHub
                 isAuthenticated={isAuthenticated}
                 setIsAuthenticated={setIsAuthenticated}
+                isCheckingAuth={isCheckingAuth}
+                onLogout={handleLogout}
                 passkey={passkey}
                 setPasskey={setPasskey}
               />
             }
           />
-          <Route path="/investomania/*" element={<InvestomaniaAdminRoute />} />
-          <Route path="/defend/*" element={<DefendAdminRoute />} />
-          <Route path="/defend" element={<DefendAdminRoute />} />
-          <Route path="/monopoly/*" element={<MonopolyAdminRoute />} />
-          <Route path="/monopoly" element={<MonopolyAdminRoute />} />
+          <Route
+            path="/investomania/*"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <InvestomaniaAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/investomania"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <InvestomaniaAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/defend/*"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <DefendAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/defend"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <DefendAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/monopoly/*"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <MonopolyAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/monopoly"
+            element={
+              <AdminProtectedRoute isAuthenticated={isAuthenticated} isCheckingAuth={isCheckingAuth}>
+                <MonopolyAdminRoute onLogout={handleLogout} />
+              </AdminProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

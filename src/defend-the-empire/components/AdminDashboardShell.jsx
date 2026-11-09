@@ -5,9 +5,9 @@ import TimerControlPanel from "./TimerControlPanel";
 import CrisisManager from "./CrisisManager";
 import TeamMonitor from "./TeamMonitor";
 import { formatClock } from "../data/simulationData";
-import { Lock, Unlock, Pause, Play, ArrowLeft, Sun, Moon, Shield, RefreshCw } from "lucide-react";
+import { Lock, Unlock, Pause, Play, ArrowLeft, Sun, Moon, Shield, RefreshCw, LogOut } from "lucide-react";
 
-function DashboardContent({ onBackToHub }) {
+function DashboardContent({ onBackToHub, onLogout }) {
   const [activeTab, setActiveTab] = useState("command");
   const {
     crises,
@@ -128,6 +128,19 @@ function DashboardContent({ onBackToHub }) {
               </>
             )}
           </button>
+
+          {/* Sign Out Button */}
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="editorial-btn editorial-btn-outline p-2 text-xs text-[#DC2626] hover:bg-[#FEF3F2] dark:hover:bg-[#2E0C16] flex items-center gap-1.5 transition-colors"
+              title="Sign Out of Admin Console"
+            >
+              <LogOut className="w-4 h-4 text-[#DC2626]" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -271,10 +284,10 @@ function DashboardContent({ onBackToHub }) {
   );
 }
 
-export default function AdminDashboardShell({ onBackToHub }) {
+export default function AdminDashboardShell({ onBackToHub, onLogout }) {
   return (
     <AdminStoreProvider>
-      <DashboardContent onBackToHub={onBackToHub} />
+      <DashboardContent onBackToHub={onBackToHub} onLogout={onLogout} />
     </AdminStoreProvider>
   );
 }
