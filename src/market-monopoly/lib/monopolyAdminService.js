@@ -782,7 +782,7 @@ export async function revokeResourceBid({ store, teamId, instanceId }) {
       return {
         ...p,
         attachedUtilities: nextAttached,
-        upgradeLevel: Math.min(3, nextAttached.length)
+        upgradeLevel: Math.min(3, Math.max(0, Number(p.upgradeLevel || 0)))
       };
     }
     return p;
