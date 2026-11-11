@@ -92,6 +92,38 @@ export async function phaseActionDirect(passkey, action, params = {}) {
 
   if (error) throw formatDbError(error, `Failed to execute ${action}`);
   if (!data?.ok) throw new Error(data?.error || `Floor action ${action} failed`);
+
+  // Extra safety: When switching round or resetting, ensure active assets and crisis counts match target round
+  if (action === 'SWITCH_ROUND' || action === 'RESET_GAME') {
+    try {
+      const targetRound = action === 'RESET_GAME' ? 1 : Number(params.round || 1);
+      const { data: stateRow } = await supabaseAdmin.from('investomania_state').select('state_json').eq('id', 1).single();
+      if (stateRow?.state_json) {
+        const s = stateRow.state_json;
+        const all = Array.isArray(s.allStocks) ? s.allStocks : [];
+        let roundAssets = all;
+        let totalCrises = 8;
+        if (targetRound === 1) {
+          roundAssets = all.filter((st) => Number(st.round) === 1);
+          totalCrises = s.crisesByRound?.['1']?.length || 8;
+        } else if (targetRound === 2) {
+          roundAssets = all.filter((st) => Number(st.round) === 2);
+          totalCrises = s.crisesByRound?.['2']?.length || 12;
+        } else if (targetRound === 3) {
+          roundAssets = all;
+          totalCrises = s.crisesByRound?.['3']?.length || 10;
+        }
+        s.currentRound = targetRound;
+        s.assets = roundAssets.length > 0 ? roundAssets : all;
+        s.totalCrisesInRound = totalCrises;
+        await supabaseAdmin.from('investomania_state').update({ state_json: s, updated_at: new Date().toISOString() }).eq('id', 1);
+        data.data = s;
+      }
+    } catch (e) {
+      console.warn('Post-round switch state sync non-fatal warning:', e);
+    }
+  }
+
   invalidateAdminStateCache();
   return data.data;
 }
