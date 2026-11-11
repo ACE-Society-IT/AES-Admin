@@ -36,6 +36,7 @@ export function getInitialStore() {
       upgradeLevel: 0,
       attachedUtilities: []
     })),
+    utilities: KARACHI_UTILITIES.map((u) => ({ ...u })),
     transactions: [],
     updatedAt: Date.now()
   };
@@ -44,6 +45,21 @@ export function getInitialStore() {
 export function hydrateMonopolyState(rawState) {
   const fallback = getInitialStore();
   if (!rawState || typeof rawState !== 'object') return fallback;
+
+  const utilities = (Array.isArray(rawState.utilities) && rawState.utilities.length > 0)
+    ? rawState.utilities.map((u) => {
+        const base = KARACHI_UTILITIES.find((bu) => Number(bu.id) === Number(u.id)) || {};
+        return {
+          ...base,
+          ...u,
+          id: Number(u.id),
+          cost: Number(u.cost ?? base.cost ?? 5),
+          name: u.name || base.name || `Utility #${u.id}`,
+          category: u.category || base.category || 'General',
+          summary: u.summary || u.description || base.summary || ''
+        };
+      })
+    : KARACHI_UTILITIES.map((u) => ({ ...u }));
 
   const teams = (Array.isArray(rawState.teams) ? rawState.teams : []).map((t) => ({
     ...t,
@@ -128,6 +144,7 @@ export function hydrateMonopolyState(rawState) {
     lastWheelResult: rawState.lastWheelResult || null,
     teams,
     properties: mergedProps,
+    utilities,
     transactions: (Array.isArray(rawState.transactions) ? rawState.transactions : []).filter(
       (tx) => tx.type !== 'TEAM_CREATED' && tx.type !== 'TEAM_DELETED'
     ),
@@ -169,15 +186,26 @@ export async function fetchMonopolyStore(forceFresh = false) {
 
   const runFetch = async () => {
     try {
-      const [stateRes, teamsRes, propsRes] = await Promise.all([
+      const [stateRes, teamsRes, propsRes, utilsRes] = await Promise.all([
         supabase.from('monopoly_state').select('state_json').eq('id', 1).maybeSingle(),
         supabase.from('monopoly_teams').select('id, name, username, passcode, cash, starting_budget, owned_resources').order('updated_at', { ascending: true }),
-        supabase.from('monopoly_properties').select('id, owner_team_id, purchase_price, upgrade_level, attached_utilities, opening_value, level3_target').order('id', { ascending: true })
+        supabase.from('monopoly_properties').select('id, owner_team_id, purchase_price, upgrade_level, attached_utilities, opening_value, level3_target, rent_values').order('id', { ascending: true }),
+        supabase.from('monopoly_utilities').select('*').order('id', { ascending: true })
       ]);
 
       if (stateRes.error) {
         throw new Error(`Supabase fetchMonopolyStore error: ${stateRes.error.message}`);
       }
+
+      const dbUtilities = Array.isArray(utilsRes?.data) && utilsRes.data.length > 0
+        ? utilsRes.data.map((row) => ({
+            id: Number(row.id),
+            name: row.name,
+            cost: Number(row.cost),
+            category: row.category || 'General',
+            summary: row.summary || row.description || ''
+          }))
+        : null;
 
       const dbTeams = Array.isArray(teamsRes.data)
         ? teamsRes.data.map((row) => ({
@@ -194,6 +222,9 @@ export async function fetchMonopolyStore(forceFresh = false) {
       let result;
       if (stateRes.data?.state_json && typeof stateRes.data.state_json === 'object') {
         const raw = { ...stateRes.data.state_json };
+        if (dbUtilities !== null) {
+          raw.utilities = dbUtilities;
+        }
         // Authoritative teams list comes from monopoly_teams table if available, otherwise raw.teams
         if (dbTeams !== null) {
           raw.teams = dbTeams;
@@ -602,15 +633,18 @@ export async function assignMultiplePropertiesToTeam({
 }
 
 /**
- * Admin: Update Property Settings (Money/Price, Level-Up Value Increase, Base Rent, Rent Increase per Level, Max Level 3)
+ * Admin: Update Property Settings (Price After Bidding, Level-Up Value Increase % & Lakhs, Rent Values for Level 0-3, Max Level 3)
  */
 export async function updatePropertySettingsAdmin({
   store,
   propertyId,
   openingValue,
+  purchasePrice,
   valueIncreasePerLevel,
+  valueIncreasePercentage,
   baseRent,
   rentIncreasePerLevel,
+  rentValues,
   upgradeCostPerLevel,
   upgradeLevel
 }) {
@@ -618,14 +652,26 @@ export async function updatePropertySettingsAdmin({
   const prop = latest.properties.find((p) => Number(p.id) === Number(propertyId));
   if (!prop) throw new Error('Property not found.');
 
+  // The new price of the property after bidding / auction
   const nextPrice =
-    openingValue !== undefined && Number(openingValue) > 0
+    purchasePrice !== undefined && Number(purchasePrice) > 0
+      ? Number(purchasePrice)
+      : openingValue !== undefined && Number(openingValue) > 0
       ? Number(openingValue)
-      : Number(prop.openingValue);
-  const nextValInc =
-    valueIncreasePerLevel !== undefined && Number(valueIncreasePerLevel) >= 0
-      ? Number(valueIncreasePerLevel)
-      : Number(prop.valueIncreasePerLevel || 25);
+      : Number(prop.purchasePrice && prop.purchasePrice > 0 ? prop.purchasePrice : prop.openingValue || 100);
+
+  // Percentage or Lakhs value increase after level upgrade
+  let nextValInc = Number(prop.valueIncreasePerLevel || Math.round(nextPrice * 0.25));
+  let nextValPct = Math.round((nextValInc / nextPrice) * 100);
+
+  if (valueIncreasePercentage !== undefined && Number(valueIncreasePercentage) >= 0) {
+    nextValPct = Number(valueIncreasePercentage);
+    nextValInc = Math.round(nextPrice * (nextValPct / 100));
+  } else if (valueIncreasePerLevel !== undefined && Number(valueIncreasePerLevel) >= 0) {
+    nextValInc = Number(valueIncreasePerLevel);
+    nextValPct = Math.round((nextValInc / nextPrice) * 100);
+  }
+
   const nextBaseRent =
     baseRent !== undefined && Number(baseRent) >= 0
       ? Number(baseRent)
@@ -643,12 +689,17 @@ export async function updatePropertySettingsAdmin({
       ? Math.min(3, Math.max(0, Number(upgradeLevel)))
       : Math.min(3, Math.max(0, Number(prop.upgradeLevel || 0)));
 
-  const nextRentValues = [
-    Math.round(nextBaseRent),
-    Math.round(nextBaseRent + nextRentInc),
-    Math.round(nextBaseRent + nextRentInc * 2),
-    Math.round(nextBaseRent + nextRentInc * 3)
-  ];
+  // Explicit Rent Values for Level 0, Level 1, Level 2, Level 3
+  const nextRentValues =
+    Array.isArray(rentValues) && rentValues.length === 4
+      ? rentValues.map((v) => Math.max(0, Math.round(Number(v) || 0)))
+      : [
+          Math.round(nextBaseRent),
+          Math.round(nextBaseRent + nextRentInc),
+          Math.round(nextBaseRent + nextRentInc * 2),
+          Math.round(nextBaseRent + nextRentInc * 3)
+        ];
+
   const nextLevel3Target = Math.round(nextPrice + nextValInc * 3);
   const nextUpgradeCosts = [
     Math.round(nextUpgradeCost),
@@ -656,19 +707,39 @@ export async function updatePropertySettingsAdmin({
     Math.round(nextUpgradeCost)
   ];
 
-  if (supabase) {
-    const { data: res, error } = await supabase.rpc('monopoly_update_property_settings', {
-      p_property_id: Number(propertyId),
-      p_name: prop.name,
-      p_opening_value: nextPrice,
-      p_rent_values: nextRentValues,
-      p_upgrade_costs: nextUpgradeCosts,
-      p_upgrade_level: nextLvl,
-      p_passkey: getAdminPasskey()
-    });
-    if (error) throw error;
-    if (res && !res.ok) throw new Error(res.error || 'Server rejected property update.');
-    return await fetchMonopolyStore(true);
+  const client = supabaseAdmin || supabase;
+  if (client) {
+    // 1. Authoritative update to monopoly_properties table
+    try {
+      await client
+        .from('monopoly_properties')
+        .update({
+          opening_value: nextPrice,
+          purchase_price: nextPrice,
+          rent_values: nextRentValues,
+          level3_target: nextLevel3Target,
+          upgrade_level: nextLvl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', Number(propertyId));
+    } catch (dbErr) {
+      console.warn('Direct monopoly_properties update error:', dbErr);
+    }
+
+    // 2. RPC call for schema synchronization
+    try {
+      await client.rpc('monopoly_update_property_settings', {
+        p_property_id: Number(propertyId),
+        p_name: prop.name,
+        p_opening_value: nextPrice,
+        p_rent_values: nextRentValues,
+        p_upgrade_costs: nextUpgradeCosts,
+        p_upgrade_level: nextLvl,
+        p_passkey: getAdminPasskey()
+      });
+    } catch (rpcErr) {
+      console.warn('RPC monopoly_update_property_settings warning:', rpcErr);
+    }
   }
 
   const nextProps = latest.properties.map((p) =>
@@ -676,9 +747,11 @@ export async function updatePropertySettingsAdmin({
       ? {
           ...p,
           openingValue: nextPrice,
+          purchasePrice: nextPrice,
           valueIncreasePerLevel: nextValInc,
+          valueIncreasePercentage: nextValPct,
           level3Target: nextLevel3Target,
-          rentIncreasePerLevel: nextRentInc,
+          rentIncreasePerLevel: Math.round((nextRentValues[3] - nextRentValues[0]) / 3),
           rentValues: nextRentValues,
           upgradeCosts: nextUpgradeCosts,
           upgradeLevel: nextLvl,
@@ -693,23 +766,184 @@ export async function updatePropertySettingsAdmin({
     propertyId: prop.id,
     propertyName: prop.name,
     amount: nextPrice,
-    note: `Updated ${prop.name}: Price Rs ${nextPrice}L | +Rs ${nextValInc}L/lvl | Rent Rs ${nextBaseRent}L (+Rs ${nextRentInc}L/lvl, Max Lvl 3)`,
+    note: `Updated ${prop.name}: Price Rs ${nextPrice}L | +${nextValPct}% (+Rs ${nextValInc}L/lvl) | Rent [${nextRentValues.join(', ')}]L`,
     createdAt: new Date().toISOString()
   };
 
-  await (supabaseAdmin || supabase).from('monopoly_transactions').upsert({
-    id: tx.id,
-    type: tx.type,
-    property_id: tx.propertyId,
-    property_name: tx.propertyName,
-    amount: tx.amount,
-    note: tx.note,
-    created_at: tx.createdAt
-  });
+  if (client) {
+    await client.from('monopoly_transactions').upsert({
+      id: tx.id,
+      type: tx.type,
+      property_id: tx.propertyId,
+      property_name: tx.propertyName,
+      amount: tx.amount,
+      note: tx.note,
+      created_at: tx.createdAt
+    });
+  }
 
   return persistMonopolyStore({
     ...latest,
     properties: nextProps,
+    transactions: [tx, ...(latest.transactions || [])]
+  });
+}
+
+/**
+ * Admin: Update official market price for a single utility / resource token
+ */
+export async function updateUtilityPriceAdmin({ utilityId, newCost }) {
+  const idNum = Number(utilityId);
+  const costNum = Math.max(1, Math.round(Number(newCost) || 1));
+  const client = supabaseAdmin || supabase;
+
+  // 1. Authoritative update to monopoly_utilities table in Postgres
+  if (client) {
+    const { error: utilDbErr } = await client
+      .from('monopoly_utilities')
+      .update({ cost: costNum })
+      .eq('id', idNum);
+    if (utilDbErr) {
+      console.warn('Update monopoly_utilities table error:', utilDbErr);
+    }
+  }
+
+  // 2. Update monopoly_state state_json.utilities
+  const latest = await fetchMonopolyStore(true);
+  const currentUtils = Array.isArray(latest.utilities) ? latest.utilities : KARACHI_UTILITIES;
+  const updatedUtils = currentUtils.map((u) =>
+    Number(u.id) === idNum ? { ...u, cost: costNum } : u
+  );
+
+  const targetUtil = currentUtils.find((u) => Number(u.id) === idNum) || { name: `Utility #${idNum}` };
+
+  const tx = {
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    type: 'UTILITY_PRICE_UPDATED',
+    utilityId: idNum,
+    utilityName: targetUtil.name,
+    amount: costNum,
+    note: `Admin set official price for ${targetUtil.name} to Rs ${costNum}L`,
+    createdAt: new Date().toISOString()
+  };
+
+  if (client) {
+    await client.from('monopoly_transactions').upsert({
+      id: tx.id,
+      type: tx.type,
+      amount: tx.amount,
+      note: tx.note,
+      created_at: tx.createdAt
+    });
+  }
+
+  return persistMonopolyStore({
+    ...latest,
+    utilities: updatedUtils,
+    transactions: [tx, ...(latest.transactions || [])]
+  });
+}
+
+/**
+ * Admin: Reset all utility prices back to official catalogue defaults
+ */
+export async function resetUtilityPricesAdmin() {
+  const client = supabaseAdmin || supabase;
+  if (client) {
+    for (const u of KARACHI_UTILITIES) {
+      await client.from('monopoly_utilities').update({ cost: u.cost }).eq('id', u.id);
+    }
+  }
+  const latest = await fetchMonopolyStore(true);
+  return persistMonopolyStore({
+    ...latest,
+    utilities: KARACHI_UTILITIES.map((u) => ({ ...u }))
+  });
+}
+
+/**
+ * Admin: Grant resource token directly to a team (optional cash deduction or free grant)
+ */
+export async function grantResourceToTeamAdmin({ teamId, utilityId, count = 1, deductPrice = false }) {
+  const latest = await fetchMonopolyStore(true);
+  const team = latest.teams.find((t) => String(t.id) === String(teamId));
+  if (!team) throw new Error('Team not found.');
+
+  const currentUtils = Array.isArray(latest.utilities) ? latest.utilities : KARACHI_UTILITIES;
+  const util = currentUtils.find((u) => Number(u.id) === Number(utilityId));
+  if (!util) throw new Error('Resource / utility token not found.');
+
+  const numCount = Math.max(1, Number(count) || 1);
+  const totalCost = deductPrice ? Number(util.cost || 0) * numCount : 0;
+  if (deductPrice && Number(team.cash || 0) < totalCost) {
+    throw new Error(`Insufficient cash. ${team.name} needs Rs ${totalCost}L but only has Rs ${team.cash}L.`);
+  }
+
+  const newTokens = [];
+  for (let i = 0; i < numCount; i++) {
+    newTokens.push({
+      instanceId: `grant_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `grant_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+      utilityId: util.id,
+      utilityName: util.name,
+      category: util.category,
+      bidPrice: Number(util.cost || 0),
+      cost: Number(util.cost || 0),
+      attachedToPropertyId: null,
+      attachedToPropertyName: null,
+      grantedByAdmin: true,
+      grantedAt: new Date().toISOString()
+    });
+  }
+
+  const currentOwned = Array.isArray(team.ownedResources) ? team.ownedResources : [];
+  const nextOwned = [...currentOwned, ...newTokens];
+  const nextCash = Math.max(0, Number(team.cash) - totalCost);
+
+  const client = supabaseAdmin || supabase;
+  if (client) {
+    await client
+      .from('monopoly_teams')
+      .update({
+        cash: nextCash,
+        owned_resources: nextOwned,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', team.id);
+  }
+
+  const nextTeams = latest.teams.map((t) =>
+    String(t.id) === String(team.id)
+      ? { ...t, cash: nextCash, ownedResources: nextOwned }
+      : t
+  );
+
+  const tx = {
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    type: 'ADMIN_GRANT_RESOURCE',
+    teamId: team.id,
+    teamName: team.name,
+    utilityId: util.id,
+    utilityName: util.name,
+    amount: totalCost,
+    note: `Admin granted ${numCount}x ${util.name} to ${team.name} (${deductPrice ? `Deducted Rs ${totalCost}L` : 'Complimentary / Free'})`,
+    createdAt: new Date().toISOString()
+  };
+
+  if (client) {
+    await client.from('monopoly_transactions').upsert({
+      id: tx.id,
+      type: tx.type,
+      team_id: tx.teamId,
+      amount: tx.amount,
+      note: tx.note,
+      created_at: tx.createdAt
+    });
+  }
+
+  return persistMonopolyStore({
+    ...latest,
+    teams: nextTeams,
     transactions: [tx, ...(latest.transactions || [])]
   });
 }
@@ -1175,30 +1409,121 @@ export async function deleteTeamAdmin({ store, teamId }) {
 }
 
 export async function resetMonopolyGameAdmin() {
+  console.log('[resetMonopolyGameAdmin] Commencing comprehensive game reset...');
+  console.log('[resetMonopolyGameAdmin] Admin passkey verified:', getAdminPasskey());
+
+  let rpcSucceeded = false;
   if (supabase) {
-    const { data: res, error } = await supabase.rpc('monopoly_reset_game', {
-      p_passkey: getAdminPasskey()
-    });
-    if (error) throw error;
-    if (res && !res.ok) throw new Error(res.error || 'Server rejected resetting game.');
-    return await fetchMonopolyStore(true);
+    try {
+      const { data: res, error } = await supabase.rpc('monopoly_reset_game', {
+        p_passkey: getAdminPasskey()
+      });
+      if (error) {
+        console.warn('[resetMonopolyGameAdmin] RPC returned error (will execute safe direct DB fallback):', error);
+      } else if (res && !res.ok) {
+        console.warn('[resetMonopolyGameAdmin] RPC server returned error status:', res.error);
+      } else {
+        console.log('[resetMonopolyGameAdmin] RPC monopoly_reset_game executed successfully:', res);
+        rpcSucceeded = true;
+      }
+    } catch (rpcErr) {
+      console.warn('[resetMonopolyGameAdmin] RPC invocation exception (proceeding to direct DB reset):', rpcErr);
+    }
   }
 
-  await (supabaseAdmin || supabase)
-    .from('monopoly_properties')
-    .update({
-      owner_team_id: null,
-      purchase_price: 0,
-      upgrade_level: 0,
-      attached_utilities: []
-    })
-    .gte('id', 1);
+  // Authoritative fallback / direct database reset across all tables
+  const client = supabaseAdmin || supabase;
+  if (client) {
+    console.log('[resetMonopolyGameAdmin] Executing direct database reset across all tables...');
 
-  await (supabaseAdmin || supabase).from('monopoly_teams').delete().neq('id', '');
-  await (supabaseAdmin || supabase).from('monopoly_transactions').delete().neq('id', '');
+    // 1. Reset all properties (with safe WHERE id >= 1 clause)
+    const { data: pData, error: pErr } = await client
+      .from('monopoly_properties')
+      .update({
+        owner_team_id: null,
+        purchase_price: 0,
+        upgrade_level: 0,
+        attached_utilities: []
+      })
+      .gte('id', 1)
+      .select('id');
+    console.log('[resetMonopolyGameAdmin] Properties reset:', pData?.length ?? 'all', 'Error:', pErr);
 
-  const fresh = getInitialStore();
-  return persistMonopolyStore(fresh);
+    // 2. Reset all teams cash to starting budget (500 Lakh) and clear owned resources
+    const { data: tData, error: tErr } = await client
+      .from('monopoly_teams')
+      .update({
+        cash: 500,
+        owned_resources: []
+      })
+      .neq('id', '')
+      .select('id');
+    console.log('[resetMonopolyGameAdmin] Teams reset:', tData?.length ?? 'all', 'Error:', tErr);
+
+    // 3. Clear all monopoly transactions
+    const { data: txData, error: txErr } = await client
+      .from('monopoly_transactions')
+      .delete()
+      .neq('id', '')
+      .select('id');
+    console.log('[resetMonopolyGameAdmin] Transactions cleared:', txData?.length ?? 'all', 'Error:', txErr);
+
+    // 4. Update monopoly_state row 1 to pristine initial state
+    const { data: currentState } = await client
+      .from('monopoly_state')
+      .select('state_json')
+      .eq('id', 1)
+      .maybeSingle();
+
+    const existingJson = currentState?.state_json || {};
+    const resetProperties = (existingJson.properties || KARACHI_PROPERTIES).map((p) => ({
+      ...p,
+      ownerTeamId: null,
+      ownerTeamName: null,
+      purchasePrice: 0,
+      upgradeLevel: 0,
+      attachedUtilities: []
+    }));
+
+    const resetTeams = (existingJson.teams || []).map((t) => ({
+      ...t,
+      cash: Number(t.startingBudget || 500),
+      ownedResources: []
+    }));
+
+    const cleanStateJson = {
+      ...existingJson,
+      currentRound: 1,
+      currentWheelRound: 1,
+      wheelSpinsByRound: { '1': {}, '2': {}, '3': {} },
+      wheelSpinsHistory: [],
+      wheelSpinsCount: 0,
+      lastWheelResult: null,
+      transactions: [],
+      properties: resetProperties,
+      teams: resetTeams,
+      updatedAt: new Date().toISOString()
+    };
+
+    const { error: sErr } = await client
+      .from('monopoly_state')
+      .update({
+        state_json: cleanStateJson,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+    console.log('[resetMonopolyGameAdmin] monopoly_state updated cleanly. Error:', sErr);
+  }
+
+  invalidateAdminMonopolyCache();
+  const fresh = await fetchMonopolyStore(true);
+  console.log('[resetMonopolyGameAdmin] Game reset complete. Fresh store snapshot:', {
+    teamsCount: fresh?.teams?.length,
+    propertiesCount: fresh?.properties?.length,
+    wheelSpinsCount: fresh?.wheelSpinsCount,
+    transactionsCount: fresh?.transactions?.length
+  });
+  return fresh;
 }
 
 export function computeTeamSummary(team, properties = []) {

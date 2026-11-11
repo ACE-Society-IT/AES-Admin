@@ -15,6 +15,9 @@ import {
   assignMultiplePropertiesToTeam,
   revokePropertySale,
   updatePropertySettingsAdmin,
+  updateUtilityPriceAdmin,
+  resetUtilityPricesAdmin,
+  grantResourceToTeamAdmin,
   recordResourceBidWin,
   revokeResourceBid,
   releaseNextWheelSpinAdmin,
@@ -31,7 +34,22 @@ import {
   computeTeamSummary
 } from '../lib/monopolyAdminService.js';
 import AdminSpinWheelModal from './AdminSpinWheelModal.jsx';
-import { RotateCw } from 'lucide-react';
+import {
+  RotateCw,
+  Coins,
+  DollarSign,
+  Sliders,
+  Plus,
+  Minus,
+  Tag,
+  Zap,
+  Shield,
+  Check,
+  Undo2,
+  Building2,
+  RefreshCw,
+  Award
+} from 'lucide-react';
 import aesLogo from '../../assets/aes-logo.png';
 
 function AdminPropertySvgBanner({ category = 'Residential', level = 0 }) {
@@ -172,16 +190,22 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
 
   // Selected Property in the Property Settings Tab
   const [selectedPropertyId, setSelectedPropertyId] = useState(1);
-  const [assignAmount, setAssignAmount] = useState('');
+  const [editPriceAfterBidding, setEditPriceAfterBidding] = useState('');
+  const [editValueIncPercent, setEditValueIncPercent] = useState('20');
   const [editValueInc, setEditValueInc] = useState('');
-  const [editBaseRent, setEditBaseRent] = useState('');
-  const [editRentInc, setEditRentInc] = useState('');
+  const [editRentLvl0, setEditRentLvl0] = useState('15');
+  const [editRentLvl1, setEditRentLvl1] = useState('25');
+  const [editRentLvl2, setEditRentLvl2] = useState('35');
+  const [editRentLvl3, setEditRentLvl3] = useState('45');
   const [editLevel, setEditLevel] = useState(0);
 
   // Selected Resource / Utility in the Resources Tab Side Panel
   const [selectedResourceId, setSelectedResourceId] = useState(1);
-  const [resourceTeamId, setResourceTeamId] = useState('');
-  const [resourceBidAmount, setResourceBidAmount] = useState('18');
+  const [editResourcePrice, setEditResourcePrice] = useState('18');
+  const [resourceCategoryFilter, setResourceCategoryFilter] = useState('ALL');
+  const [grantTeamId, setGrantTeamId] = useState('');
+  const [grantCount, setGrantCount] = useState(1);
+  const [grantDeductCash, setGrantDeductCash] = useState(false);
   const [resourceSearch, setResourceSearch] = useState('');
 
   const [propertySearch, setPropertySearch] = useState('');
@@ -309,68 +333,136 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     );
   }, [store, selectedPropertyId]);
 
-  // Populate side panel inputs whenever the Admin clicks a different property card
-  useEffect(() => {
-    if (!selectedProperty) return;
-    setAssignAmount(String(selectedProperty.openingValue || 100));
-    const valInc =
-      selectedProperty.valueIncreasePerLevel !== undefined
-        ? selectedProperty.valueIncreasePerLevel
-        : Math.round(((selectedProperty.level3Target || selectedProperty.openingValue * 1.6) - selectedProperty.openingValue) / 3);
+  // Synchronize Property Settings form when selected property changes
+  const syncPropertyForm = useCallback((prop) => {
+    if (!prop) return;
+    setSelectedPropertyId(prop.id);
+    const price = Number(prop.purchasePrice || prop.openingValue || 100);
+    setEditPriceAfterBidding(String(price));
+
+    let valInc = 25;
+    let valIncPercent = 20;
+    if (prop.valueIncreasePerLevel !== undefined) {
+      valInc = Number(prop.valueIncreasePerLevel);
+      valIncPercent = price > 0 ? Math.round((valInc / price) * 100) : 20;
+    } else if (prop.level3Target && price > 0) {
+      valInc = Math.round((Number(prop.level3Target) - price) / 3);
+      valIncPercent = Math.round((valInc / price) * 100);
+    } else if (prop.valueIncreasePercentage !== undefined) {
+      valIncPercent = Number(prop.valueIncreasePercentage);
+      valInc = Math.round((price * valIncPercent) / 100);
+    }
     setEditValueInc(String(valInc));
-    const baseR = selectedProperty.rentValues?.[0] ?? 15;
-    setEditBaseRent(String(baseR));
-    const rentInc =
-      selectedProperty.rentIncreasePerLevel !== undefined
-        ? selectedProperty.rentIncreasePerLevel
-        : Math.round(((selectedProperty.rentValues?.[3] ?? baseR + 30) - baseR) / 3);
-    setEditRentInc(String(rentInc));
-    setEditLevel(Math.min(3, Math.max(0, Number(selectedProperty.upgradeLevel || 0))));
-  }, [selectedProperty?.id]);
+    setEditValueIncPercent(String(valIncPercent));
+
+    const rents = Array.isArray(prop.rentValues) && prop.rentValues.length >= 4
+      ? prop.rentValues
+      : [15, 25, 35, 45];
+    setEditRentLvl0(String(rents[0] ?? 15));
+    setEditRentLvl1(String(rents[1] ?? 25));
+    setEditRentLvl2(String(rents[2] ?? 35));
+    setEditRentLvl3(String(rents[3] ?? 45));
+
+    setEditLevel(Math.min(3, Math.max(0, Number(prop.upgradeLevel || 0))));
+  }, []);
+
+  useEffect(() => {
+    if (selectedProperty) {
+      syncPropertyForm(selectedProperty);
+    }
+  }, [selectedProperty?.id, syncPropertyForm]);
+
+  const activeUtilities = useMemo(() => {
+    return Array.isArray(store?.utilities) && store.utilities.length > 0
+      ? store.utilities
+      : KARACHI_UTILITIES;
+  }, [store?.utilities]);
 
   const selectedResource = useMemo(() => {
     return (
-      KARACHI_UTILITIES.find((u) => Number(u.id) === Number(selectedResourceId)) ||
-      KARACHI_UTILITIES[0]
+      activeUtilities.find((u) => Number(u.id) === Number(selectedResourceId)) ||
+      activeUtilities[0]
     );
-  }, [selectedResourceId]);
+  }, [activeUtilities, selectedResourceId]);
+
+  useEffect(() => {
+    if (selectedResource) {
+      setEditResourcePrice(String(selectedResource.cost || 18));
+    }
+  }, [selectedResource?.id, selectedResource?.cost]);
 
   const filteredResources = useMemo(() => {
-    if (!resourceSearch.trim()) return KARACHI_UTILITIES;
-    const q = resourceSearch.toLowerCase();
-    return KARACHI_UTILITIES.filter(
-      (u) => u.name.toLowerCase().includes(q) || u.category.toLowerCase().includes(q)
-    );
-  }, [resourceSearch]);
+    return activeUtilities.filter((u) => {
+      const matchesCat =
+        resourceCategoryFilter === 'ALL' ||
+        (u.category || '').toLowerCase() === resourceCategoryFilter.toLowerCase();
+      if (!matchesCat) return false;
+      if (!resourceSearch.trim()) return true;
+      const q = resourceSearch.toLowerCase();
+      return (
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.category || '').toLowerCase().includes(q) ||
+        (u.summary || '').toLowerCase().includes(q)
+      );
+    });
+  }, [activeUtilities, resourceCategoryFilter, resourceSearch]);
 
   const handleSelectResourceCard = (util) => {
     setSelectedResourceId(util.id);
-    setResourceBidAmount(String(util.cost || 15));
+    setEditResourcePrice(String(util.cost || 18));
   };
 
-  const handleAssignSelectedResource = async (e) => {
+  const handleSaveResourcePrice = async (e) => {
     if (e) e.preventDefault();
     if (!selectedResource) return;
-    if (!resourceTeamId) {
-      notify('Select a team in the side panel first.', 'err');
-      return;
-    }
-    const bidAmt = Number(resourceBidAmount || selectedResource.cost);
-    if (!Number.isFinite(bidAmt) || bidAmt <= 0) {
-      notify('Enter a valid resource bid amount in Lakhs.', 'err');
+    const priceNum = Number(editResourcePrice);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      notify('Enter a valid resource price in Lakhs.', 'err');
       return;
     }
     try {
-      const updated = await recordResourceBidWin({
-        store,
+      const updated = await updateUtilityPriceAdmin({
         utilityId: selectedResource.id,
-        teamId: resourceTeamId,
-        bidAmount: bidAmt
+        newCost: priceNum
       });
       setStore(updated);
-      notify(`${selectedResource.name} given to team (Rs ${bidAmt}L deducted automatically)`);
+      notify(`Saved official bank price for ${selectedResource.name} to Rs ${priceNum}L`);
     } catch (err) {
-      notify(err.message, 'err');
+      notify('Failed to save resource price: ' + (err?.message || err), 'err');
+    }
+  };
+
+  const handleResetResourcePrices = async () => {
+    if (!window.confirm('Reset all 15 utility prices back to official catalogue defaults?')) {
+      return;
+    }
+    try {
+      const updated = await resetUtilityPricesAdmin();
+      setStore(updated);
+      notify('All utility prices reset to official catalogue defaults.');
+    } catch (err) {
+      notify('Failed to reset prices: ' + (err?.message || err), 'err');
+    }
+  };
+
+  const handleGrantResourceToTeam = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedResource) return;
+    if (!grantTeamId) {
+      notify('Select a team to grant the token to.', 'err');
+      return;
+    }
+    try {
+      const updated = await grantResourceToTeamAdmin({
+        teamId: grantTeamId,
+        utilityId: selectedResource.id,
+        count: Number(grantCount || 1),
+        deductPrice: grantDeductCash
+      });
+      setStore(updated);
+      notify(`Granted ${grantCount}x ${selectedResource.name} to team!`);
+    } catch (err) {
+      notify('Failed to grant resource: ' + (err?.message || err), 'err');
     }
   };
 
@@ -378,28 +470,52 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     try {
       const updated = await revokeResourceBid({ store, teamId, instanceId });
       setStore(updated);
-      notify('Resource removed from team and bid money refunded.');
+      notify('Resource token revoked from team.');
     } catch (err) {
       notify(err.message, 'err');
     }
   };
 
   const handleSelectPropertyCard = (prop) => {
-    setSelectedPropertyId(prop.id);
-    setAssignAmount(String(prop.openingValue || 100));
-    const valInc =
-      prop.valueIncreasePerLevel !== undefined
-        ? prop.valueIncreasePerLevel
-        : Math.round(((prop.level3Target || prop.openingValue * 1.6) - prop.openingValue) / 3);
-    setEditValueInc(String(valInc));
-    const baseR = prop.rentValues?.[0] ?? 15;
-    setEditBaseRent(String(baseR));
-    const rentInc =
-      prop.rentIncreasePerLevel !== undefined
-        ? prop.rentIncreasePerLevel
-        : Math.round(((prop.rentValues?.[3] ?? baseR + 30) - baseR) / 3);
-    setEditRentInc(String(rentInc));
-    setEditLevel(Math.min(3, Math.max(0, Number(prop.upgradeLevel || 0))));
+    syncPropertyForm(prop);
+  };
+
+  const handlePriceAfterBiddingChange = (valStr) => {
+    setEditPriceAfterBidding(valStr);
+    const p = Number(valStr || 0);
+    const pct = Number(editValueIncPercent || 0);
+    if (p > 0 && pct > 0) {
+      setEditValueInc(String(Math.round((p * pct) / 100)));
+    }
+  };
+
+  const handleValueIncPercentChange = (pctStr) => {
+    setEditValueIncPercent(pctStr);
+    const pct = Number(pctStr || 0);
+    const p = Number(editPriceAfterBidding || 0);
+    if (p > 0) {
+      setEditValueInc(String(Math.round((p * pct) / 100)));
+    }
+  };
+
+  const handleValueIncLakhChange = (lakhStr) => {
+    setEditValueInc(lakhStr);
+    const l = Number(lakhStr || 0);
+    const p = Number(editPriceAfterBidding || 0);
+    if (p > 0) {
+      setEditValueIncPercent(String(Math.round((l / p) * 100)));
+    }
+  };
+
+  const handleAutoScaleRents = (stepPercent = 30) => {
+    const base = Number(editRentLvl0 || 15);
+    const r1 = Math.round(base * (1 + stepPercent / 100));
+    const r2 = Math.round(base * (1 + (stepPercent * 2) / 100));
+    const r3 = Math.round(base * (1 + (stepPercent * 3) / 100));
+    setEditRentLvl1(String(r1));
+    setEditRentLvl2(String(r2));
+    setEditRentLvl3(String(r3));
+    notify(`Auto-scaled rents with +${stepPercent}% growth per level.`);
   };
 
   const handleSwitchRound = async (roundNum) => {
@@ -462,22 +578,35 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     }
   };
 
-  // Save Property Settings (Money, Level-Up Increase, Rent Increase, Max Level 3)
+  // Save Property Settings (Post-Bidding Price, Level-Up Increase %, Tiered Rents Lvl 0-3, Max Level 3)
   const handleSavePropertySettings = async (e) => {
     if (e) e.preventDefault();
     if (!selectedProperty) return;
+    const priceAfterBidding = Number(
+      editPriceAfterBidding || selectedProperty.purchasePrice || selectedProperty.openingValue || 100
+    );
+    const valInc = Number(editValueInc || 25);
+    const valPct = Number(editValueIncPercent || 20);
+    const rents = [
+      Number(editRentLvl0 ?? 15),
+      Number(editRentLvl1 ?? 25),
+      Number(editRentLvl2 ?? 35),
+      Number(editRentLvl3 ?? 45)
+    ];
+
     try {
       const updated = await updatePropertySettingsAdmin({
         store,
         propertyId: selectedProperty.id,
-        openingValue: Number(assignAmount || selectedProperty.openingValue),
-        valueIncreasePerLevel: Number(editValueInc || 25),
-        baseRent: Number(editBaseRent || 15),
-        rentIncreasePerLevel: Number(editRentInc || 10),
+        purchasePrice: priceAfterBidding,
+        openingValue: priceAfterBidding,
+        valueIncreasePercentage: valPct,
+        valueIncreasePerLevel: valInc,
+        rentValues: rents,
         upgradeLevel: editLevel
       });
       setStore(updated);
-      notify(`Saved settings for ${selectedProperty.name} (Max Level 3)`);
+      notify(`Saved settings for #${selectedProperty.id} ${selectedProperty.name} (Max Level 3)`);
     } catch (err) {
       notify(err.message, 'err');
     }
@@ -580,12 +709,20 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
     if (!window.confirm('Are you sure you want to reset all wheel spins? This will clear the spin history and counter.')) {
       return;
     }
+    console.log('[Admin Reset Spins] Commencing wheel spin history reset...');
+    console.log('[Admin Reset Spins] Previous spin count:', store?.wheelSpinsCount || 0);
     try {
       setIsSpinningWheelAdmin(true);
       const fresh = await resetWheelSpinsAdmin();
+      console.log('[Admin Reset Spins SUCCESS] Fresh store after wheel spin reset:', {
+        wheelSpinsCount: fresh?.wheelSpinsCount,
+        wheelSpinsHistoryLength: fresh?.wheelSpinsHistory?.length,
+        currentWheelRound: fresh?.currentWheelRound
+      });
       setStore(fresh);
-      notify('Wheel spins history reset.');
+      notify('Wheel spins history cleanly reset.');
     } catch (err) {
+      console.error('[Admin Reset Spins ERROR]', err);
       notify(err.message, 'err');
     } finally {
       setIsSpinningWheelAdmin(false);
@@ -651,16 +788,49 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
   const [confirmResetGame, setConfirmResetGame] = useState(false);
 
   const handleResetGame = async () => {
+    console.log('[Admin Reset] Initiating full Market Monopoly game reset...');
+    console.log('[Admin Reset] Admin Passkey verified:', getAdminPasskey());
+    console.log('[Admin Reset] Store snapshot prior to reset:', {
+      teamsCount: store?.teams?.length || 0,
+      propertiesCount: store?.properties?.length || 0,
+      assignedPropertiesCount: (store?.properties || []).filter((p) => p.ownerTeamId).length,
+      wheelSpinsCount: store?.wheelSpinsCount || 0,
+      transactionsCount: store?.transactions?.length || 0,
+      currentRound: store?.currentRound,
+      currentWheelRound: store?.currentWheelRound
+    });
+
     try {
       const updated = await resetMonopolyGameAdmin();
+      console.log('[Admin Reset SUCCESS] Comprehensive reset completed cleanly.');
+      console.log('[Admin Reset SUCCESS] State snapshot after reset:', {
+        teamsCount: updated?.teams?.length || 0,
+        propertiesCount: updated?.properties?.length || 0,
+        assignedPropertiesCount: (updated?.properties || []).filter((p) => p.ownerTeamId).length,
+        wheelSpinsCount: updated?.wheelSpinsCount || 0,
+        transactionsCount: updated?.transactions?.length || 0,
+        currentRound: updated?.currentRound,
+        currentWheelRound: updated?.currentWheelRound,
+        timestamp: new Date().toISOString()
+      });
+      console.table(
+        (updated?.teams || []).map((t) => ({
+          ID: t.id,
+          Name: t.name,
+          StartingCash: `Rs ${t.cash}L`,
+          Resources: (t.ownedResources || []).length
+        }))
+      );
       setStore(updated);
       setConfirmResetGame(false);
       setSelectedGivePropIds([]);
       setSelectedGiveResIds([]);
       setGiveTargetTeamId('');
-      notify('Game reset (all teams, properties, and transactions cleared).');
+      notify('Game reset cleanly. All properties, teams cash, and transactions restored.');
     } catch (err) {
-      notify(err.message, 'err');
+      console.error('[Admin Reset ERROR] Game reset encountered an issue:', err);
+      console.error('[Admin Reset ERROR] Error code:', err?.code, 'Message:', err?.message, 'Details:', err?.details);
+      notify('Failed to reset: ' + (err?.message || err), 'err');
     }
   };
 
@@ -838,8 +1008,8 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
               { id: 'properties', label: 'Property Settings', badge: '25' },
               {
                 id: 'resources',
-                label: 'Resources (Bid)',
-                badge: `${(store.teams || []).reduce((sum, t) => sum + (t.ownedResources?.length || 0), 0)}`
+                label: 'Resource Pricing',
+                badge: `${activeUtilities.length}`
               },
               { id: 'teams', label: 'Users & Teams', badge: (store.teams || []).length },
               { id: 'wheel', label: 'Spin Wheel', badge: `#${currentWheelRound}` },
@@ -1253,152 +1423,268 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                     })}
                   </div>
 
-                  {/* Right Side Panel: Property Settings Only (Price, Level-Up & Rent, Max Level 3) */}
+                  {/* Right Side Panel: Property Settings Redesign */}
                   {selectedProperty && (() => {
-                    const previewPrice = Number(assignAmount || selectedProperty.openingValue || 0);
-                    const previewValInc = Number(editValueInc || 0);
-                    const previewBaseRent = Number(editBaseRent || 0);
-                    const previewRentInc = Number(editRentInc || 0);
-                    const attachedCount = (selectedProperty.attachedUtilities || []).length;
+                    const priceAfterBidding = Number(
+                      editPriceAfterBidding || selectedProperty.purchasePrice || selectedProperty.openingValue || 100
+                    );
+                    const valInc = Number(editValueInc || 25);
+                    const valPct = Number(editValueIncPercent || 20);
+                    const r0 = Number(editRentLvl0 ?? 15);
+                    const r1 = Number(editRentLvl1 ?? 25);
+                    const r2 = Number(editRentLvl2 ?? 35);
+                    const r3 = Number(editRentLvl3 ?? 45);
+
+                    const progression = [
+                      { lvl: 0, val: Math.round(priceAfterBidding), rent: Math.round(r0), gainPct: 0 },
+                      { lvl: 1, val: Math.round(priceAfterBidding + valInc), rent: Math.round(r1), gainPct: valPct },
+                      { lvl: 2, val: Math.round(priceAfterBidding + valInc * 2), rent: Math.round(r2), gainPct: valPct * 2 },
+                      { lvl: 3, val: Math.round(priceAfterBidding + valInc * 3), rent: Math.round(r3), gainPct: valPct * 3 }
+                    ];
+
+                    const owner = store.teams.find(
+                      (t) =>
+                        String(t.id) === String(selectedProperty.ownerTeamId) ||
+                        (selectedProperty.ownerTeamName &&
+                          String(t.name).toLowerCase() === String(selectedProperty.ownerTeamName).toLowerCase())
+                    );
 
                     return (
-                      <div className="xl:col-span-4 editorial-card overflow-hidden xl:sticky xl:top-5 space-y-0">
-                        {/* Selected Property Header */}
+                      <div className="xl:col-span-4 editorial-card overflow-hidden xl:sticky xl:top-5 space-y-0 shadow-lg">
+                        {/* Selected Property Header Banner */}
                         <div className="relative w-full h-24 overflow-hidden border-b border-[#E5E5E5]">
                           <AdminPropertySvgBanner category={selectedProperty.category} />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3 flex flex-col justify-between">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 flex flex-col justify-between">
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-black/75 text-white">
-                                Property #{selectedProperty.id} · {selectedProperty.category}
+                                #{selectedProperty.id} · {selectedProperty.category}
                               </span>
                               <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-[#8D5B3A] text-white">
                                 Max Level 3
                               </span>
                             </div>
-                            <h3 className="text-base font-bold text-white leading-tight">
-                              {selectedProperty.name}
-                            </h3>
+                            <div>
+                              <h3 className="text-base font-bold text-white leading-tight">
+                                {selectedProperty.name}
+                              </h3>
+                              <p className="text-[11px] font-mono text-[#F1CA7E] mt-0.5">
+                                Owner: {owner ? owner.name : 'Unclaimed Public Land'}
+                              </p>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="p-4">
-                          <form onSubmit={handleSavePropertySettings} className="space-y-3.5">
-                            <span className="font-mono text-[10px] uppercase font-bold text-[#71717A] block">
-                              Property Settings (Price, Level-Up & Rent)
-                            </span>
-
-                            {/* Level-Up Progress Line Driven by Attached Bid Resources */}
-                            <div className="p-2.5 rounded-lg border border-[#E5E5E5] space-y-1.5">
-                              <div className="flex items-center justify-between font-mono text-[10px]">
-                                <span className="text-[#71717A]">
-                                  Resource Progress ({attachedCount}/3 Resources)
-                                </span>
-                                <strong className="text-[#8D5B3A]">
-                                  Level {editLevel} / 3 Max
-                                </strong>
-                              </div>
-                              <div className="grid grid-cols-3 gap-1">
-                                {[1, 2, 3].map((step) => (
-                                  <div
-                                    key={step}
-                                    className={`h-2 rounded-sm transition-colors ${
-                                      Number(editLevel) >= step ? 'bg-[#8D5B3A]' : 'bg-[#E5E5E5]'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2.5">
-                              <div>
-                                <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                  Property Price (Lakhs)
+                        <div className="p-4 space-y-4">
+                          <form onSubmit={handleSavePropertySettings} className="space-y-4">
+                            {/* Section 1: Post-Bidding Purchase Price */}
+                            <div className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#1E1715] border border-[#E5E5E5] space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block font-mono text-[11px] font-bold uppercase text-[#8D5B3A]">
+                                  New Price After Bidding
                                 </label>
+                                <span className="font-mono text-[10px] text-[#71717A]">Auction Final</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-[#71717A] font-bold">Rs</span>
                                 <input
                                   type="number"
                                   step="1"
                                   min="1"
-                                  value={assignAmount}
-                                  onChange={(e) => setAssignAmount(e.target.value)}
-                                  className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                  value={editPriceAfterBidding}
+                                  onChange={(e) => handlePriceAfterBiddingChange(e.target.value)}
+                                  className="editorial-input font-mono text-sm py-1.5 px-2.5 w-full font-bold text-[#0F0F11]"
+                                  placeholder="e.g. 180"
                                   required
                                 />
+                                <span className="font-mono text-xs text-[#71717A] font-bold">Lakh</span>
+                              </div>
+                              <p className="text-[10px] font-mono text-[#71717A]">
+                                Base purchase price and net worth evaluation for this property.
+                              </p>
+                            </div>
+
+                            {/* Section 2: Value Increase After Level Upgrade */}
+                            <div className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#1E1715] border border-[#E5E5E5] space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="block font-mono text-[11px] font-bold uppercase text-[#8D5B3A]">
+                                  Value Increase / Level Upgrade
+                                </label>
+                                <span className="font-mono text-[10px] text-[#16A34A] font-bold">Per Level</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Increase (%)
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      step="1"
+                                      min="0"
+                                      value={editValueIncPercent}
+                                      onChange={(e) => handleValueIncPercentChange(e.target.value)}
+                                      className="editorial-input font-mono text-xs py-1.5 px-2 w-full font-bold"
+                                      placeholder="e.g. 20"
+                                      required
+                                    />
+                                    <span className="font-mono text-xs text-[#71717A]">%</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Lakhs Gain (+L)
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono text-xs text-[#71717A]">+</span>
+                                    <input
+                                      type="number"
+                                      step="1"
+                                      min="0"
+                                      value={editValueInc}
+                                      onChange={(e) => handleValueIncLakhChange(e.target.value)}
+                                      className="editorial-input font-mono text-xs py-1.5 px-2 w-full font-bold"
+                                      placeholder="e.g. 35"
+                                      required
+                                    />
+                                    <span className="font-mono text-xs text-[#71717A]">L</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="text-[10px] font-mono text-[#71717A]">
+                                Value jumps from Rs {priceAfterBidding}L to Rs {Math.round(priceAfterBidding + valInc * 3)}L at Level 3.
+                              </p>
+                            </div>
+
+                            {/* Section 3: Tiered Rent Matrix (Level 0, 1, 2, 3) */}
+                            <div className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#1E1715] border border-[#E5E5E5] space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="block font-mono text-[11px] font-bold uppercase text-[#8D5B3A]">
+                                  Tiered Rent Schedule (L0 - L3)
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAutoScaleRents(30)}
+                                  className="text-[10px] font-mono text-[#8D5B3A] hover:underline font-bold"
+                                  title="Auto-scale L1..L3 by +30% each step"
+                                >
+                                  Auto-Scale (+30%)
+                                </button>
                               </div>
 
-                              <div>
-                                <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                  Value + / Level (L)
-                                </label>
-                                <input
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  value={editValueInc}
-                                  onChange={(e) => setEditValueInc(e.target.value)}
-                                  className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full"
-                                  required
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                  Base Rent (Lvl 0) (L)
-                                </label>
-                                <input
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  value={editBaseRent}
-                                  onChange={(e) => setEditBaseRent(e.target.value)}
-                                  className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full"
-                                  required
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                  Rent + / Level (L)
-                                </label>
-                                <input
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  value={editRentInc}
-                                  onChange={(e) => setEditRentInc(e.target.value)}
-                                  className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full"
-                                  required
-                                />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Level 0 (Base Rent)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={editRentLvl0}
+                                    onChange={(e) => setEditRentLvl0(e.target.value)}
+                                    className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Level 1 Rent
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={editRentLvl1}
+                                    onChange={(e) => setEditRentLvl1(e.target.value)}
+                                    className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Level 2 Rent
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={editRentLvl2}
+                                    onChange={(e) => setEditRentLvl2(e.target.value)}
+                                    className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                    required
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                    Level 3 Rent
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={editRentLvl3}
+                                    onChange={(e) => setEditRentLvl3(e.target.value)}
+                                    className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                    required
+                                  />
+                                </div>
                               </div>
                             </div>
 
-                            {/* Level 0 -> Level 3 Progression Preview */}
-                            <div className="rounded-lg border border-[#E5E5E5] p-2.5 space-y-1 font-mono text-[11px]">
-                              <div className="grid grid-cols-3 text-[10px] text-[#71717A] pb-1 border-b border-[#E5E5E5]">
-                                <span>Resources</span>
-                                <span className="text-center">Property Value</span>
+                            {/* Section 4: Current Upgrade Level */}
+                            <div className="p-3 rounded-xl border border-[#E5E5E5] space-y-2">
+                              <div className="flex items-center justify-between font-mono text-[11px]">
+                                <span className="font-bold text-[#71717A]">Active Upgrade Level:</span>
+                                <strong className="text-[#8D5B3A] font-bold text-xs">
+                                  Level {editLevel} / 3 Max
+                                </strong>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {[0, 1, 2, 3].map((lvl) => (
+                                  <button
+                                    key={lvl}
+                                    type="button"
+                                    onClick={() => setEditLevel(lvl)}
+                                    className={`py-1 px-2 rounded font-mono text-xs font-bold transition-all ${
+                                      Number(editLevel) === lvl
+                                        ? 'bg-[#8D5B3A] text-white shadow'
+                                        : 'bg-[#F4F4F5] hover:bg-[#E4E4E7] text-[#71717A]'
+                                    }`}
+                                  >
+                                    Lvl {lvl}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Section 5: Live Progression Preview Table */}
+                            <div className="rounded-xl border border-[#E5E5E5] p-2.5 space-y-1 font-mono text-[11px] bg-white dark:bg-[#181110]">
+                              <div className="grid grid-cols-4 text-[9px] uppercase tracking-wider text-[#71717A] pb-1 border-b border-[#E5E5E5] font-bold">
+                                <span>Tier</span>
+                                <span className="text-center">Valuation</span>
+                                <span className="text-center">Gain %</span>
                                 <span className="text-right">Rent</span>
                               </div>
-                              {[0, 1, 2, 3].map((lvl) => (
+                              {progression.map((tier) => (
                                 <div
-                                  key={lvl}
-                                  className={`grid grid-cols-3 py-0.5 ${
-                                    Number(editLevel) === lvl ? 'font-bold text-[#8D5B3A]' : ''
+                                  key={tier.lvl}
+                                  className={`grid grid-cols-4 py-1 items-center ${
+                                    Number(editLevel) === tier.lvl
+                                      ? 'font-bold text-[#8D5B3A] bg-[#8D5B3A]/10 rounded px-1 -mx-1'
+                                      : 'text-[#3F3F46]'
                                   }`}
                                 >
-                                  <span>{lvl === 0 ? 'Base (0/3)' : `Lvl ${lvl} (${lvl}/3)`}</span>
-                                  <span className="text-center">
-                                    Rs {Math.round(previewPrice + lvl * previewValInc)}L
-                                  </span>
-                                  <span className="text-right text-[#16A34A]">
-                                    Rs {Math.round(previewBaseRent + lvl * previewRentInc)}L
-                                  </span>
+                                  <span>{tier.lvl === 0 ? 'Base' : `Lvl ${tier.lvl}`}</span>
+                                  <span className="text-center">Rs {tier.val}L</span>
+                                  <span className="text-center text-[#71717A]">+{tier.gainPct}%</span>
+                                  <span className="text-right text-[#16A34A] font-bold">Rs {tier.rent}L</span>
                                 </div>
                               ))}
                             </div>
 
                             <button
                               type="submit"
-                              className="editorial-btn editorial-btn-dark w-full justify-center py-2 text-xs font-semibold"
+                              className="editorial-btn editorial-btn-dark w-full justify-center py-2.5 text-xs font-bold shadow-md hover:shadow-lg transition-all"
                             >
                               Save Property Settings
                             </button>
@@ -1412,30 +1698,73 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
             )}
 
             {/* ============================================================= */}
-            {/* TAB 2: BID RESOURCES (17) — CLICK RESOURCE & ASSIGN TO TEAM   */}
+            {/* TAB 2: RESOURCE PRICING & UTILITY TOKENS (NO BIDDING)          */}
             {/* ============================================================= */}
             {activeTab === 'resources' && (
               <div className="space-y-4">
-                {/* Resource Search Bar */}
-                <div className="editorial-card p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <input
-                    type="text"
-                    value={resourceSearch}
-                    onChange={(e) => setResourceSearch(e.target.value)}
-                    placeholder="Search 17 bid resources..."
-                    className="editorial-input text-xs py-1.5 px-3 w-full sm:max-w-xs"
-                  />
-                  <span className="font-mono text-xs text-[#71717A]">
-                    Click a resource card, set bid amount, and assign to the winning team
-                  </span>
+                {/* Header & Controls Bar */}
+                <div className="editorial-card p-4 space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-[#71717A] font-bold">
+                          Municipal Bank Catalogue
+                        </span>
+                        <span className="editorial-badge text-[10px] bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5] font-bold">
+                          Fixed Bank Pricing
+                        </span>
+                      </div>
+                      <h2 className="text-lg font-bold text-[#0F0F11]">
+                        Karachi Utility & Resource Pricing
+                      </h2>
+                      <p className="text-xs font-mono text-[#71717A] mt-0.5">
+                        Set official fixed bank prices for utility tokens. Teams purchase directly from the Bank or are granted tokens by the administrator.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleResetResourcePrices}
+                      className="editorial-btn editorial-btn-outline text-xs py-2 px-3 font-semibold text-[#B42318] border-[#B42318]/30 hover:bg-[#FEF3F2] self-start md:self-auto cursor-pointer"
+                    >
+                      Reset All to Catalogue Defaults
+                    </button>
+                  </div>
+
+                  {/* Search and Category Filter Tabs */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E5E5E5]">
+                    <input
+                      type="text"
+                      value={resourceSearch}
+                      onChange={(e) => setResourceSearch(e.target.value)}
+                      placeholder="Search 15 utilities (e.g. Power, Water, Fiber, Solar)..."
+                      className="editorial-input text-xs py-1.5 px-3 w-full sm:max-w-xs"
+                    />
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {['ALL', 'Power', 'Water', 'Energy', 'Comms', 'Access', 'Security'].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setResourceCategoryFilter(cat)}
+                          className={`editorial-btn text-xs py-1 px-2.5 font-mono ${
+                            resourceCategoryFilter === cat ? 'editorial-btn-dark' : 'editorial-btn-outline'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
+                {/* 15 Utilities Grid + Side Pricing Panel */}
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-                  {/* Left: Compact Clickable 17 Resource Cards */}
-                  <div className="xl:col-span-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                  {/* Left: Compact Clickable 15 Resource Cards */}
+                  <div className="xl:col-span-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-3">
                     {filteredResources.map((util) => {
                       const isSelected = Number(selectedResource?.id) === Number(util.id);
-                      const assignedCount = store.teams.reduce(
+                      const circulatingCount = store.teams.reduce(
                         (cnt, t) =>
                           cnt +
                           (t.ownedResources || []).filter((r) => Number(r.utilityId) === Number(util.id))
@@ -1448,42 +1777,52 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                           key={util.id}
                           type="button"
                           onClick={() => handleSelectResourceCard(util)}
-                          className={`editorial-card p-3 text-left transition-all flex flex-col justify-between gap-2 ${
+                          className={`editorial-card p-3.5 text-left transition-all flex flex-col justify-between gap-2.5 cursor-pointer ${
                             isSelected
-                              ? 'ring-2 ring-[#8D5B3A] border-[#8D5B3A]'
+                              ? 'ring-2 ring-[#8D5B3A] border-[#8D5B3A] shadow-md'
                               : 'hover:border-[#8D5B3A]/60'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#8D5B3A] text-white">
+                            <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded bg-[#8D5B3A] text-white">
                               #{util.id}
                             </span>
-                            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded border border-[#E5E5E5] text-[#71717A]">
-                              Sold: {assignedCount}
+                            <span className="font-mono text-[9px] px-2 py-0.5 rounded bg-[#F4F4F5] text-[#71717A] border border-[#E5E5E5]">
+                              In Circulation: {circulatingCount}
                             </span>
                           </div>
 
-                          <div>
-                            <div className="text-xs font-bold text-[#0F0F11] truncate" title={util.name}>
+                          <div className="space-y-1">
+                            <div className="text-sm font-bold text-[#0F0F11] leading-tight" title={util.name}>
                               {util.name}
                             </div>
-                            <div className="text-[10px] font-mono text-[#71717A]">
+                            <div className="text-[10px] font-mono text-[#8D5B3A] font-semibold">
                               {util.category}
                             </div>
+                            <p className="text-[11px] text-[#71717A] line-clamp-2 leading-relaxed">
+                              {util.summary || util.description}
+                            </p>
                           </div>
 
-                          <div className="flex items-center justify-between text-[10px] font-mono pt-1.5 border-t border-[#E5E5E5]">
-                            <span>Base: Rs {util.cost}L</span>
-                            <span className="text-[#16A34A] font-bold">+1 Lvl</span>
+                          <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-[#E5E5E5]">
+                            <div>
+                              <span className="text-[9px] text-[#71717A] uppercase block">Bank Price</span>
+                              <strong className="text-sm font-bold text-[#0F0F11]">
+                                Rs {util.cost} Lakh
+                              </strong>
+                            </div>
+                            <span className="text-[10px] font-bold text-[#16A34A] px-2 py-0.5 rounded bg-[#ECFDF3] border border-[#A6F4C5]">
+                              +1 Level
+                            </span>
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Right Side Panel: Assign Bid Resource to Team & Auto-Deduct Money */}
+                  {/* Right Side Panel: Official Price Studio & Manual Token Grant */}
                   {selectedResource && (() => {
-                    const previewResPrice = Number(resourceBidAmount || selectedResource.cost || 0);
+                    const previewCost = Number(editResourcePrice || selectedResource.cost || 0);
                     const holderRecords = [];
                     store.teams.forEach((t) => {
                       (t.ownedResources || []).forEach((r) => {
@@ -1498,55 +1837,89 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                     });
 
                     return (
-                      <div className="xl:col-span-4 editorial-card p-4 xl:sticky xl:top-5 space-y-4">
+                      <div className="xl:col-span-4 editorial-card p-4 xl:sticky xl:top-5 space-y-4 shadow-lg">
+                        {/* Selected Utility Header */}
                         <div className="pb-3 border-b border-[#E5E5E5] space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-mono text-[10px] font-bold uppercase text-[#8D5B3A]">
-                              Resource #{selectedResource.id} · {selectedResource.category}
+                              Utility #{selectedResource.id} · {selectedResource.category}
                             </span>
-                            <span className="editorial-badge text-[10px] font-mono">
-                              +1 Property Level
+                            <span className="editorial-badge text-[10px] font-mono font-bold bg-[#ECFDF3] text-[#027A48]">
+                              Catalogue Item
                             </span>
                           </div>
                           <h3 className="text-base font-bold text-[#0F0F11]">
                             {selectedResource.name}
                           </h3>
-                          <p className="text-xs text-[#71717A]">
-                            {selectedResource.description}
+                          <p className="text-xs text-[#71717A] leading-relaxed">
+                            {selectedResource.summary || selectedResource.description}
                           </p>
                         </div>
 
-                        {/* Assign Resource to Winning Team (Auto-Deduct Bid Money) */}
-                        <form onSubmit={handleAssignSelectedResource} className="space-y-3">
+                        {/* 1. Official Bank Price Form */}
+                        <form onSubmit={handleSaveResourcePrice} className="space-y-3 p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#1E1715] border border-[#E5E5E5]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-[10px] uppercase font-bold text-[#8D5B3A]">
+                              Set Official Bank Price
+                            </span>
+                            <span className="text-[10px] font-mono text-[#71717A]">Bank Cost</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-[#71717A] font-bold">Rs</span>
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              value={editResourcePrice}
+                              onChange={(e) => setEditResourcePrice(e.target.value)}
+                              className="editorial-input font-mono text-sm py-1.5 px-2.5 w-full font-bold text-[#0F0F11]"
+                              placeholder="Price in Lakhs"
+                              required
+                            />
+                            <span className="font-mono text-xs text-[#71717A] font-bold">Lakh</span>
+                          </div>
+
+                          {/* Quick Step Buttons */}
+                          <div className="flex items-center gap-1.5">
+                            {[-5, -1, 1, 5].map((delta) => (
+                              <button
+                                key={delta}
+                                type="button"
+                                onClick={() => {
+                                  const cur = Number(editResourcePrice || selectedResource.cost || 0);
+                                  setEditResourcePrice(String(Math.max(1, cur + delta)));
+                                }}
+                                className="flex-1 py-1 rounded bg-[#E4E4E7] dark:bg-[#2A201D] hover:bg-[#D4D4D8] font-mono text-[10px] font-bold text-[#3F3F46] dark:text-[#E4E4E7] transition-colors"
+                              >
+                                {delta > 0 ? `+${delta}L` : `${delta}L`}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="editorial-btn editorial-btn-dark w-full justify-center py-2 text-xs font-bold"
+                          >
+                            Save Resource Price (Rs {previewCost}L)
+                          </button>
+                        </form>
+
+                        {/* 2. Direct Grant Token to Team */}
+                        <form onSubmit={handleGrantResourceToTeam} className="space-y-3 p-3 rounded-xl border border-[#E5E5E5]">
                           <span className="font-mono text-[10px] uppercase font-bold text-[#71717A] block">
-                            Give Resource to Team (From Bid)
+                            Direct Grant to Team Treasury
                           </span>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-2">
                             <div>
                               <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                Bid Amount (Lakhs)
-                              </label>
-                              <input
-                                type="number"
-                                step="1"
-                                min="1"
-                                value={resourceBidAmount}
-                                onChange={(e) => setResourceBidAmount(e.target.value)}
-                                className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
-                                required
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block font-mono text-[10px] text-[#71717A] mb-1">
-                                Select Team
+                                Target Team
                               </label>
                               <select
-                                value={resourceTeamId}
-                                onChange={(e) => setResourceTeamId(e.target.value)}
+                                value={grantTeamId}
+                                onChange={(e) => setGrantTeamId(e.target.value)}
                                 className="editorial-input text-xs py-1.5 px-2 w-full"
-                                required
                               >
                                 <option value="">Choose team...</option>
                                 {store.teams.map((t) => (
@@ -1556,36 +1929,68 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                                 ))}
                               </select>
                             </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-mono text-[10px] text-[#71717A] mb-1">
+                                  Quantity
+                                </label>
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="1"
+                                  max="10"
+                                  value={grantCount}
+                                  onChange={(e) => setGrantCount(Math.max(1, Number(e.target.value)))}
+                                  className="editorial-input font-mono text-xs py-1.5 px-2.5 w-full font-bold"
+                                />
+                              </div>
+                              <div className="flex flex-col justify-end">
+                                <label className="flex items-center gap-1.5 text-[10px] font-mono text-[#71717A] cursor-pointer pb-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={grantDeductCash}
+                                    onChange={(e) => setGrantDeductCash(e.target.checked)}
+                                    className="rounded border-[#D4D4D8]"
+                                  />
+                                  <span>Deduct Cost</span>
+                                </label>
+                              </div>
+                            </div>
                           </div>
 
                           <button
                             type="submit"
-                            className="editorial-btn editorial-btn-dark w-full justify-center py-2 text-xs font-semibold"
+                            disabled={!grantTeamId}
+                            className="editorial-btn editorial-btn-outline w-full justify-center py-2 text-xs font-bold disabled:opacity-50"
                           >
-                            Give Resource to Team & Deduct Rs {previewResPrice}L
+                            Grant {grantCount}x Token to Team
                           </button>
                         </form>
 
-                        {/* Teams Holding This Resource */}
-                        <div className="pt-3 border-t border-[#E5E5E5] space-y-2">
-                          <span className="font-mono text-[10px] uppercase font-bold text-[#71717A] block">
-                            Assigned Copies ({holderRecords.length})
-                          </span>
+                        {/* 3. Active Token Holders List */}
+                        <div className="pt-2 border-t border-[#E5E5E5] space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-[10px] uppercase font-bold text-[#71717A]">
+                              Circulating Tokens ({holderRecords.length})
+                            </span>
+                          </div>
+
                           {holderRecords.length === 0 ? (
-                            <p className="text-xs font-mono text-[#71717A]">
-                              No team owns this resource yet.
+                            <p className="text-xs font-mono text-[#71717A] p-2 bg-[#F4F4F5] dark:bg-[#1C1615] rounded text-center">
+                              No team currently holds this token.
                             </p>
                           ) : (
-                            <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                            <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                               {holderRecords.map((rec) => (
                                 <div
                                   key={rec.instanceId}
                                   className="p-2 rounded border border-[#E5E5E5] flex items-center justify-between gap-2 text-xs"
                                 >
                                   <div>
-                                    <strong className="text-[#0F0F11] block">{rec.teamName}</strong>
+                                    <strong className="text-[#0F0F11] block font-serif">{rec.teamName}</strong>
                                     <span className="font-mono text-[10px] text-[#71717A]">
-                                      Paid Rs {rec.bidPrice}L ·{' '}
+                                      Rs {rec.bidPrice || selectedResource.cost}L ·{' '}
                                       {rec.attachedToPropertyName
                                         ? `On ${rec.attachedToPropertyName}`
                                         : 'In Inventory'}
@@ -1594,9 +1999,9 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
                                   <button
                                     type="button"
                                     onClick={() => handleRevokeResource(rec.teamId, rec.instanceId)}
-                                    className="editorial-btn editorial-btn-outline text-[#B42318] text-[10px] py-1 px-2"
+                                    className="editorial-btn editorial-btn-outline text-[#B42318] text-[10px] py-1 px-2 hover:bg-[#FEF3F2]"
                                   >
-                                    Remove
+                                    Revoke
                                   </button>
                                 </div>
                               ))}
