@@ -104,8 +104,8 @@ export function hydrateMonopolyState(rawState) {
       rentIncreasePerLevel,
       upgradeCosts,
       maxLevel: 3,
-      ownerTeamId: ownerTeam ? ownerTeam.id : savedProp?.ownerTeamId || null,
-      ownerTeamName: ownerTeam ? ownerTeam.name : savedProp?.ownerTeamName || null,
+      ownerTeamId: ownerTeam ? ownerTeam.id : (savedProp?.ownerTeamId || null),
+      ownerTeamName: ownerTeam ? ownerTeam.name : (savedProp?.ownerTeamId ? (savedProp?.ownerTeamName || null) : null),
       purchasePrice: Number(savedProp?.purchasePrice || 0),
       upgradeLevel: Math.min(3, Math.max(0, Number(savedProp?.upgradeLevel || 0))),
       attachedUtilities: Array.isArray(savedProp?.attachedUtilities)
