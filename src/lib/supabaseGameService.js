@@ -129,9 +129,64 @@ export async function phaseActionDirect(passkey, action, params = {}) {
 }
 
 /**
- * Admin team management directly via Supabase RPC
+ * Admin team management directly via Supabase RPC with resilient direct deletion fallback
  */
 export async function manageTeamDirect(passkey, action, teamData = {}) {
+  if (action === 'DELETE') {
+    await authAdminDirect(passkey);
+
+    const targetTeamId = teamData.teamId || teamData.id;
+    if (!targetTeamId) throw new Error('Missing teamId for DELETE operation');
+
+    // 1. Remove from investomania_teams table
+    const { error: teamDelError } = await supabaseAdmin
+      .from('investomania_teams')
+      .delete()
+      .eq('id', targetTeamId);
+
+    if (teamDelError) {
+      console.warn('Direct delete from investomania_teams error:', teamDelError);
+    }
+
+    // 2. Fetch authoritative state, purge team from state_json.teams and leaderboard
+    const { data: stateRow, error: stateFetchErr } = await supabaseAdmin
+      .from('investomania_state')
+      .select('state_json')
+      .eq('id', 1)
+      .single();
+
+    if (stateFetchErr) throw formatDbError(stateFetchErr, 'Failed to fetch state for team deletion');
+
+    let updatedState = stateRow?.state_json || {};
+    if (updatedState.teams && updatedState.teams[targetTeamId]) {
+      const nextTeams = { ...updatedState.teams };
+      delete nextTeams[targetTeamId];
+      updatedState = { ...updatedState, teams: nextTeams };
+    }
+
+    if (Array.isArray(updatedState.leaderboard)) {
+      updatedState = {
+        ...updatedState,
+        leaderboard: updatedState.leaderboard.filter(
+          (t) => (t.id || t.teamId) !== targetTeamId
+        )
+      };
+    }
+
+    const { error: stateUpdateErr } = await supabaseAdmin
+      .from('investomania_state')
+      .update({
+        state_json: updatedState,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+
+    if (stateUpdateErr) throw formatDbError(stateUpdateErr, 'Failed to update state after team deletion');
+
+    invalidateAdminStateCache();
+    return updatedState;
+  }
+
   const { data, error } = await supabase.rpc('investomania_manage_team', {
     p_passkey: passkey,
     p_action: action,

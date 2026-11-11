@@ -1662,7 +1662,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                       </p>
                     </div>
                     <button
-                      onClick={() => setActiveTab('crises')}
+                      onClick={() => setAdminTab('crises')}
                       className="editorial-btn editorial-btn-outline text-xs py-1.5 px-3 cursor-pointer"
                     >
                       + Create New Draft in Studio
@@ -1675,7 +1675,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         No draft crises currently in the pipeline.
                       </p>
                       <button
-                        onClick={() => setActiveTab('crises')}
+                        onClick={() => setAdminTab('crises')}
                         className="editorial-btn editorial-btn-dark text-xs py-1.5 px-3 cursor-pointer"
                       >
                         Open Crisis Studio to Author Drafts
