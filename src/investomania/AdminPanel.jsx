@@ -36,7 +36,7 @@ import investomaniaLogo from '../assets/InvestomaniaLogo.png';
 import aesLogo from '../assets/aes-logo.png';
 
 export default function AdminPanel({ onBackToHub, onLogout }) {
-  const { gameState } = useGame();
+  const { gameState, fetchLatestState } = useGame();
   
   // Mobile/Tablet Sidebar Window (Modal Drawer) state
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -157,6 +157,8 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     setLastActionStatus(`Running ${actionLabel}...`);
     try {
       await asyncFn();
+      await fetchAdminOverview(true);
+      if (fetchLatestState) await fetchLatestState(true);
       setLastActionStatus(`Success: ${actionLabel}`);
       addToast('Action Completed', actionLabel, 'success');
     } catch (err) {
@@ -170,11 +172,11 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   };
 
   // Fetch Full Admin Overview (Teams, Havens, Telemetry)
-  const fetchAdminOverview = async () => {
+  const fetchAdminOverview = async (forceFresh = true) => {
     try {
       const [directState, teamsList] = await Promise.all([
-        fetchGameStateDirect().catch(() => null),
-        fetchTeamsDirect().catch(() => [])
+        fetchGameStateDirect(forceFresh).catch(() => null),
+        fetchTeamsDirect(forceFresh).catch(() => [])
       ]);
 
       if (directState) {
@@ -204,7 +206,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   // Fetch Tax Havens
   const fetchTaxHavens = async () => {
     try {
-      const directState = await fetchGameStateDirect();
+      const directState = await fetchGameStateDirect(true);
       if (Array.isArray(directState?.taxChannels) && directState.taxChannels.length > 0) {
         setAdminHavens(directState.taxChannels);
       } else {
@@ -217,7 +219,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   };
 
   useEffect(() => {
-    fetchAdminOverview();
+    fetchAdminOverview(true);
     fetchTaxHavens();
 
     let channel = null;
@@ -228,14 +230,16 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'investomania_teams' },
           () => {
-            fetchAdminOverview();
+            fetchAdminOverview(true);
+            if (fetchLatestState) fetchLatestState(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'investomania_state' },
           () => {
-            fetchAdminOverview();
+            fetchAdminOverview(true);
+            if (fetchLatestState) fetchLatestState(true);
           }
         )
         .subscribe();
@@ -245,17 +249,19 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
 
     const handleVisibility = () => {
       if (!document.hidden) {
-        fetchAdminOverview();
+        fetchAdminOverview(true);
+        if (fetchLatestState) fetchLatestState(true);
       }
     };
     window.addEventListener('focus', handleVisibility);
     document.addEventListener('visibilitychange', handleVisibility);
 
+    // Responsive failover heartbeat (4s) so admin dashboard never lags behind floor events
     const poll = setInterval(() => {
       if (!document.hidden) {
-        fetchAdminOverview();
+        fetchAdminOverview(false);
       }
-    }, 20000);
+    }, 4000);
 
     return () => {
       if (channel) supabase.removeChannel(channel);
@@ -263,7 +269,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
       document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(poll);
     };
-  }, []);
+  }, [fetchLatestState]);
 
   // Sync Round Settings inputs with gameState
   useEffect(() => {

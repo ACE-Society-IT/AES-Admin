@@ -61,9 +61,9 @@ export function GameProvider({ children }) {
   }, []);
 
   // Fetch Authoritative State Directly from Supabase
-  const fetchLatestState = useCallback(async () => {
+  const fetchLatestState = useCallback(async (forceFresh = true) => {
     try {
-      const directState = await fetchGameStateDirect();
+      const directState = await fetchGameStateDirect(forceFresh);
       if (directState) {
         setGameState(directState);
       }
@@ -74,7 +74,7 @@ export function GameProvider({ children }) {
 
   // Realtime Supabase Subscription
   useEffect(() => {
-    fetchLatestState();
+    fetchLatestState(true);
 
     let channel = null;
     try {
@@ -87,7 +87,7 @@ export function GameProvider({ children }) {
             if (payload.new && payload.new.state_json) {
               setGameState(payload.new.state_json);
             } else {
-              fetchLatestState();
+              fetchLatestState(true);
             }
           }
         )
@@ -95,7 +95,7 @@ export function GameProvider({ children }) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'investomania_teams' },
           () => {
-            fetchLatestState();
+            fetchLatestState(true);
           }
         )
         .subscribe();
@@ -105,17 +105,18 @@ export function GameProvider({ children }) {
 
     const handleFocus = () => {
       if (!document.hidden) {
-        fetchLatestState();
+        fetchLatestState(true);
       }
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
 
+    // Responsive failover heartbeat (4s) so admin dashboard never lags behind floor events
     const pollInterval = setInterval(() => {
       if (!document.hidden) {
-        fetchLatestState();
+        fetchLatestState(false);
       }
-    }, 20000);
+    }, 4000);
 
     return () => {
       if (channel) supabase.removeChannel(channel);

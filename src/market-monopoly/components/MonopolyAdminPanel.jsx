@@ -268,7 +268,7 @@ export default function MonopolyAdminPanel({ onBackToHub, onLogout }) {
       if (document.visibilityState === 'visible') {
         refreshStore(true);
       }
-    }, 6000);
+    }, 4000);
 
     return () => {
       supabase.removeChannel(sub);

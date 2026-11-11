@@ -139,7 +139,7 @@ export function hydrateMonopolyState(rawState) {
 let _adminCachedStore = null;
 let _adminCachedAt = 0;
 let _adminActivePromise = null;
-const ADMIN_CACHE_TTL_MS = 3500;
+const ADMIN_CACHE_TTL_MS = 0;
 
 export function invalidateAdminMonopolyCache() {
   _adminCachedStore = null;
@@ -159,7 +159,7 @@ export async function fetchMonopolyStore(forceFresh = false) {
   if (forceFresh) {
     invalidateAdminMonopolyCache();
   } else {
-    if (_adminCachedStore && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
+    if (_adminCachedStore && ADMIN_CACHE_TTL_MS > 0 && Date.now() - _adminCachedAt < ADMIN_CACHE_TTL_MS) {
       return _adminCachedStore;
     }
     if (_adminActivePromise) {

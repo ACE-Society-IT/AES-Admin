@@ -20,7 +20,7 @@ let _adminGameStatePromise = null;
 let _adminTeamsCache = null;
 let _adminTeamsCachedAt = 0;
 let _adminTeamsPromise = null;
-const CACHE_TTL_MS = 2500;
+const CACHE_TTL_MS = 0;
 
 export function invalidateAdminStateCache() {
   _adminGameStateCache = null;
@@ -35,11 +35,15 @@ export function invalidateAdminStateCache() {
  * Fetch authoritative game state directly from Supabase
  */
 export async function fetchGameStateDirect(forceFresh = false) {
-  if (!forceFresh && _adminGameStateCache && Date.now() - _adminGameStateCachedAt < CACHE_TTL_MS) {
-    return _adminGameStateCache;
-  }
-  if (!forceFresh && _adminGameStatePromise) {
-    return _adminGameStatePromise;
+  if (forceFresh) {
+    invalidateAdminStateCache();
+  } else {
+    if (_adminGameStateCache && CACHE_TTL_MS > 0 && Date.now() - _adminGameStateCachedAt < CACHE_TTL_MS) {
+      return _adminGameStateCache;
+    }
+    if (_adminGameStatePromise) {
+      return _adminGameStatePromise;
+    }
   }
 
   const run = async () => {
@@ -168,6 +172,7 @@ export async function toggleProjectorResultsDirect(passkey, shouldReveal = null)
     throw formatDbError(updateErr, 'Failed to update projector results reveal state');
   }
 
+  invalidateAdminStateCache();
   return state;
 }
 
@@ -360,6 +365,7 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
     throw formatDbError(updateErr, `Crisis operation ${action} failed`);
   }
 
+  invalidateAdminStateCache();
   return state;
 }
 
@@ -377,6 +383,7 @@ export async function updateHavenDirect(passkey, { channelId, safeLimit, taxRate
 
   if (error) throw formatDbError(error, 'Haven update failed');
   if (!data?.ok) throw new Error(data?.error || 'Haven update failed');
+  invalidateAdminStateCache();
   return data.data;
 }
 
@@ -393,6 +400,7 @@ export async function managePasskeyDirect(callerPasskey, action, targetPasskey =
 
   if (error) throw formatDbError(error, `Passkey operation ${action} failed`);
   if (!data?.ok) throw new Error(data?.error || 'Passkey operation failed');
+  invalidateAdminStateCache();
   return data.passkeys;
 }
 
@@ -400,11 +408,15 @@ export async function managePasskeyDirect(callerPasskey, action, targetPasskey =
  * Fetch all registered competitor desks directly from Supabase
  */
 export async function fetchTeamsDirect(forceFresh = false) {
-  if (!forceFresh && _adminTeamsCache && Date.now() - _adminTeamsCachedAt < CACHE_TTL_MS) {
-    return _adminTeamsCache;
-  }
-  if (!forceFresh && _adminTeamsPromise) {
-    return _adminTeamsPromise;
+  if (forceFresh) {
+    invalidateAdminStateCache();
+  } else {
+    if (_adminTeamsCache && CACHE_TTL_MS > 0 && Date.now() - _adminTeamsCachedAt < CACHE_TTL_MS) {
+      return _adminTeamsCache;
+    }
+    if (_adminTeamsPromise) {
+      return _adminTeamsPromise;
+    }
   }
 
   const run = async () => {
