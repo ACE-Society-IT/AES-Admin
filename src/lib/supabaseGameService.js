@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase as sharedSupabase, supabaseAdmin as sharedSupabaseAdmin } from '../supabaseClient.js';
 
 export const SUPABASE_URL = 'https://dvynsvvmqaibybjdsukb.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2eW5zdnZtcWFpYnliamRzdWtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5NTg1NDIsImV4cCI6MjEwOTUzNDU0Mn0.F_J9N24gb-MDT4NkOoLufVWasvvGiAosRNRZUNiEJQE';
 export const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2eW5zdnZtcWFpYnliamRzdWtiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5Mzk1ODU0MiwiZXhwIjoyMTA5NTM0NTQyfQ.T60Fc5XGuQJ0Z-DdP8YjRkHGRjbaZB29UcK6K6K5oHc';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+export const supabase = sharedSupabase;
+export const supabaseAdmin = sharedSupabaseAdmin;
 
 function formatDbError(err, fallbackMsg = 'Database operation failed') {
   if (!err) return new Error(fallbackMsg);
@@ -182,6 +182,71 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
       .eq('id', 1);
 
     if (stateUpdateErr) throw formatDbError(stateUpdateErr, 'Failed to update state after team deletion');
+
+    invalidateAdminStateCache();
+    return updatedState;
+  }
+
+  if (action === 'UPDATE_ALL_BUDGETS') {
+    await authAdminDirect(passkey);
+    const newBudget = Number(teamData.budget ?? teamData.initialBudget ?? teamData.cash ?? 100000);
+
+    // 1. Update all teams in investomania_teams table
+    const { error: teamsUpdateErr } = await supabaseAdmin
+      .from('investomania_teams')
+      .update({
+        cash: newBudget,
+        initial_budget: newBudget,
+        updated_at: new Date().toISOString()
+      })
+      .neq('id', '');
+
+    if (teamsUpdateErr) {
+      console.warn('Direct update investomania_teams error:', teamsUpdateErr);
+    }
+
+    // 2. Update state_json teams and leaderboard
+    const { data: stateRow, error: stateFetchErr } = await supabaseAdmin
+      .from('investomania_state')
+      .select('state_json')
+      .eq('id', 1)
+      .single();
+
+    if (stateFetchErr) throw formatDbError(stateFetchErr, 'Failed to fetch state for bulk budget update');
+
+    let updatedState = stateRow?.state_json || {};
+    if (updatedState.teams && typeof updatedState.teams === 'object') {
+      const nextTeams = {};
+      Object.keys(updatedState.teams).forEach((id) => {
+        nextTeams[id] = {
+          ...updatedState.teams[id],
+          cash: newBudget,
+          initialRoundBudget: newBudget
+        };
+      });
+      updatedState = { ...updatedState, teams: nextTeams };
+    }
+
+    if (Array.isArray(updatedState.leaderboard)) {
+      updatedState = {
+        ...updatedState,
+        leaderboard: updatedState.leaderboard.map((t) => ({
+          ...t,
+          cash: newBudget,
+          initialRoundBudget: newBudget
+        }))
+      };
+    }
+
+    const { error: stateUpdateErr } = await supabaseAdmin
+      .from('investomania_state')
+      .update({
+        state_json: updatedState,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+
+    if (stateUpdateErr) throw formatDbError(stateUpdateErr, 'Failed to update state after bulk budget update');
 
     invalidateAdminStateCache();
     return updatedState;

@@ -13,7 +13,8 @@ export function GameProvider({ children }) {
   const [team, setTeam] = useState(() => {
     try {
       const saved = sessionStorage.getItem('investomania_team');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved || !saved.trim() || saved === 'undefined' || saved === 'null') return null;
+      return JSON.parse(saved);
     } catch {
       return null;
     }

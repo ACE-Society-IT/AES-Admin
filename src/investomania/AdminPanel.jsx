@@ -796,26 +796,6 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     );
   }, [adminTeams, gameState?.teams, gameState?.leaderboard, teamsSearchQuery]);
 
-  // Loading guard if gameState not connected yet
-  if (!gameState) {
-    return (
-      <div className="editorial-canvas w-full min-h-screen flex items-center justify-center p-6" data-admin-theme={themeMode}>
-        <div className="editorial-card p-8 text-center max-w-sm w-full space-y-3">
-          <div className="w-8 h-8 mx-auto border-2 border-[#0F0F11] border-t-transparent rounded-full animate-spin" />
-          <h2 className="font-serif text-lg font-semibold text-[#0F0F11]">
-            Connecting to Investomania Engine...
-          </h2>
-          <p className="text-xs text-[#71717A]">
-            Subscribing to WebSocket telemetry on port 4000.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const isTradingOpen = gameState.phase === 'TRADING' && !gameState.isPaused;
-  const isFloorOpen = gameState.phase === 'TRADING';
-  const currentCrises = gameState.crisesByRound?.[gameState.currentRound] || [];
   const draftCrises = useMemo(() => {
     if (Array.isArray(gameState?.draftCrises) && gameState.draftCrises.length > 0) {
       return gameState.draftCrises;
@@ -855,6 +835,27 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     }
     return draftCrises.filter((d) => Number(d.round || 1) === Number(cockpitDraftFilter));
   }, [draftCrises, cockpitDraftFilter, gameState?.currentRound]);
+
+  // Loading guard if gameState not connected yet
+  if (!gameState) {
+    return (
+      <div className="editorial-canvas w-full min-h-screen flex items-center justify-center p-6" data-admin-theme={themeMode}>
+        <div className="editorial-card p-8 text-center max-w-sm w-full space-y-3">
+          <div className="w-8 h-8 mx-auto border-2 border-[#0F0F11] border-t-transparent rounded-full animate-spin" />
+          <h2 className="font-serif text-lg font-semibold text-[#0F0F11]">
+            Connecting to Investomania Engine...
+          </h2>
+          <p className="text-xs text-[#71717A]">
+            Subscribing to WebSocket telemetry on port 4000.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isTradingOpen = gameState.phase === 'TRADING' && !gameState.isPaused;
+  const isFloorOpen = gameState.phase === 'TRADING';
+  const currentCrises = gameState.crisesByRound?.[gameState.currentRound] || [];
   const releasedCrisesList = gameState.releasedCrises || [];
   const activeCrisisObj = gameState.activeCrisis || (releasedCrisesList.length > 0 ? releasedCrisesList[0] : null);
   const hasReleasedCrisis = Boolean(activeCrisisObj);
@@ -1285,7 +1286,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                               ? 'bg-[var(--accent-green-bg)] text-[var(--accent-green-text)] border-[var(--accent-green-border)]'
                               : 'bg-[var(--accent-red-bg)] text-[var(--accent-red-text)] border-[var(--accent-red-border)]'
                           }`}>
-                            {isPriceShockApplied ? '✓ SHOCK APPLIED' : '⏳ IMPACT PENDING'}
+                            {isPriceShockApplied ? 'SHOCK APPLIED' : 'IMPACT PENDING'}
                           </span>
                           <button
                             type="button"
@@ -1294,7 +1295,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                             className="editorial-btn editorial-btn-outline text-[#B42318] text-[10px] font-mono font-bold py-0.5 px-2 cursor-pointer shadow-xs"
                             title="Retract and delete active crisis from trading floor"
                           >
-                            🗑️ Retract from Floor
+                            Retract from Floor
                           </button>
                         </>
                       )}
@@ -1380,7 +1381,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           </span>
                         </div>
                         <p className="text-xs text-[var(--text-muted)]">
-                          Zero-manual operation: Automatically releases crisis without price shock ➔ runs decrypt window with floor locked ➔ opens trading floor ➔ auto-closes floor ➔ triggers price impact.
+                          Zero-manual operation: Automatically releases crisis without price shock -&gt; runs decrypt window with floor locked -&gt; opens trading floor -&gt; auto-closes floor -&gt; triggers price impact.
                         </p>
                       </div>
                     </div>
@@ -1471,7 +1472,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                     }`}>
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-[10px] uppercase font-bold">4. Price Shockwave</span>
-                        {isPriceShockApplied && <span className="text-[10px] font-mono font-bold">✓ APPLIED</span>}
+                        {isPriceShockApplied && <span className="text-[10px] font-mono font-bold">APPLIED</span>}
                       </div>
                       <p className="text-[11px] leading-tight">Asset prices updated & net worth recalculated.</p>
                       <div className="font-mono text-[11px] pt-1">
@@ -1532,7 +1533,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           className="editorial-btn editorial-btn-dark text-xs py-1 px-2.5 cursor-pointer"
                           title="Force-forward to next auto step immediately"
                         >
-                          ⚡ Fast-Forward Step
+                          Fast-Forward Step
                         </button>
                       )}
                     </div>
@@ -1574,7 +1575,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         </span>
                         {hasReleasedCrisis && (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-green-text)]">
-                            ✓ ACTIVE
+                            ACTIVE
                           </span>
                         )}
                       </div>
@@ -1604,11 +1605,11 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         </span>
                         {!hasReleasedCrisis ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--text-muted)]">
-                            🔒 LOCKED (STEP 1)
+                            LOCKED (STEP 1)
                           </span>
                         ) : isFloorOpen ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-green-text)]">
-                            ✓ FLOOR OPEN
+                            FLOOR OPEN
                           </span>
                         ) : (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-yellow-text)]">
@@ -1625,7 +1626,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           disabled={!hasReleasedCrisis || actionLoading}
                           className="editorial-btn editorial-btn-outline border-[var(--accent-red-border)] text-[var(--accent-red-text)] w-full justify-center text-xs py-2 cursor-pointer"
                         >
-                          🔒 Close Trading Floor
+                          Close Trading Floor
                         </button>
                       ) : (
                         <button
@@ -1650,15 +1651,15 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         </span>
                         {!hasReleasedCrisis ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--text-muted)]">
-                            🔒 LOCKED (STEP 1)
+                            LOCKED (STEP 1)
                           </span>
                         ) : !isFloorOpen ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--text-muted)]">
-                            🔒 LOCKED (OPEN FLOOR FIRST)
+                            LOCKED (OPEN FLOOR FIRST)
                           </span>
                         ) : isPriceShockApplied ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-green-text)]">
-                            ✓ SHOCK APPLIED
+                            SHOCK APPLIED
                           </span>
                         ) : (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-red-text)]">
@@ -1678,7 +1679,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                             : 'editorial-btn-red shadow-xs cursor-pointer'
                         }`}
                       >
-                        {isPriceShockApplied ? '✓ Price Shock Applied' : '3. Trigger Price Shock'}
+                        {isPriceShockApplied ? 'Price Shock Applied' : '3. Trigger Price Shock'}
                       </button>
                     </div>
                   </div>
@@ -2274,7 +2275,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           crisesViewTab === 'drafts' ? 'editorial-btn-dark' : 'editorial-btn-outline'
                         }`}
                       >
-                        📋 Drafts ({draftCrises.length})
+                        Drafts ({draftCrises.length})
                       </button>
                       {[1, 2, 3].map((r) => (
                         <button
@@ -2393,7 +2394,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                   disabled={actionLoading}
                                   className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 cursor-pointer shadow-xs"
                                 >
-                                  🚀 Release to Floor
+                                  Release to Floor
                                 </button>
                                 <button
                                   type="button"
@@ -2515,7 +2516,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                   disabled={actionLoading}
                                   className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 cursor-pointer shadow-xs"
                                 >
-                                  🚀 Release to Floor
+                                  Release to Floor
                                 </button>
                                 <button
                                   type="button"
