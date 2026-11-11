@@ -534,68 +534,15 @@ export default function AdminSpinWheelModal({
                     transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                     className="w-full max-w-md bg-[#1C050B] border-2 border-[#ECC37A] rounded-2xl shadow-2xl p-6 text-center space-y-4"
                   >
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#701020] border border-[#F1CA7E]/40 text-[#F1CA7E] text-[11px] font-mono font-bold uppercase tracking-wider">
-                      {outcome.spinNumber ? `Spin #${outcome.spinNumber} Outcome` : 'Wheel Outcome'}
-                    </div>
-
-                    {/* TEAM NAME (WHO WAS SPUN) */}
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#F1CA7E]/70 font-semibold block">
-                        Spun Team (Payer)
-                      </span>
-                      <h2 className="text-2xl sm:text-3xl font-black font-serif text-white tracking-tight">
-                        {outcome.teamName}
+                    <div className="py-2 space-y-3">
+                      <h2 className="text-xl sm:text-2xl font-black font-serif text-white tracking-tight leading-relaxed">
+                        <span className="text-[#F1CA7E]">{outcome.teamName}</span> landed on{' '}
+                        <span className="text-[#ECC37A]">{outcome.propertyName}</span>{' '}
+                        and will pay rent of{' '}
+                        <span className={outcome.status === 'PAID_RENT' ? 'text-[#F87171]' : 'text-[#4ADE80]'}>
+                          Rs {outcome.status === 'PAID_RENT' ? outcome.rentAmount : 0} Lakh
+                        </span>
                       </h2>
-                      <span className="text-xs font-mono text-[#F1CA7E] font-bold">
-                        Cash: Rs {outcome.spinnerNewCash}L
-                      </span>
-                    </div>
-
-                    <div className="w-12 h-0.5 bg-[#ECC37A]/30 mx-auto" />
-
-                    {/* LANDED PROPERTY */}
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#F1CA7E]/70 font-semibold block">
-                        Landed On Property
-                      </span>
-                      <h3 className="text-xl sm:text-2xl font-bold font-serif text-[#ECC37A] leading-tight">
-                        #{outcome.propertyId} {outcome.propertyName}
-                      </h3>
-                      <span className="text-xs font-mono text-[#F8EEE1]/70 block">
-                        Owner: <strong className="text-white">{outcome.ownerTeamName || 'Unowned / State Land'}</strong>
-                      </span>
-                    </div>
-
-                    {/* SETTLEMENT BADGE */}
-                    <div className={`p-3 rounded-xl border text-xs font-mono font-bold ${
-                      outcome.status === 'PAID_RENT'
-                        ? 'bg-[#3F0A12] border-[#F87171] text-[#FECACA]'
-                        : outcome.status === 'OWN_PROPERTY'
-                        ? 'bg-[#0E2E1D] border-[#22C55E] text-[#86EFAC]'
-                        : 'bg-[#151D2A] border-[#60A5FA] text-[#BFDBFE]'
-                    }`}>
-                      {outcome.status === 'PAID_RENT' ? (
-                        <div>
-                          <div className="text-sm font-black text-[#F87171]">-Rs {outcome.rentAmount} Lakh Rent Paid</div>
-                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
-                            Paid to {outcome.ownerTeamName}
-                          </div>
-                        </div>
-                      ) : outcome.status === 'OWN_PROPERTY' ? (
-                        <div>
-                          <div className="text-sm font-black text-[#4ADE80]">Rs 0 Rent (Own Property)</div>
-                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
-                            Safe on own territory
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="text-sm font-black text-[#60A5FA]">Rs 0 Rent (Unclaimed)</div>
-                          <div className="text-[11px] font-normal text-white/80 mt-0.5">
-                            Unclaimed public territory
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     {/* ACTION BUTTONS IN POPUP */}
