@@ -122,6 +122,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   const [batchPercentInput, setBatchPercentInput] = useState(10);
   const [crisisImpacts, setCrisisImpacts] = useState({}); // { OGDC: -15, PPL: 10 }
   const [crisesViewTab, setCrisesViewTab] = useState('1'); // '1' | '2' | '3' | 'drafts'
+  const [cockpitDraftFilter, setCockpitDraftFilter] = useState('CURRENT'); // 'CURRENT' | 'ALL' | '1' | '2' | '3'
 
   // Round Settings
   const [decryptSecInput, setDecryptSecInput] = useState(180);
@@ -720,13 +721,13 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     }, `Deleted Draft Crisis`);
   };
 
-  // Publish Draft Crisis
+  // Publish Draft / Staged Crisis to Floor
   const handlePublishDraftCrisis = (draft) => {
     const key = getEffectivePasskey();
     runAction(async () => {
-      await manageCrisisDirect(key, 'PUBLISH_DRAFT', { draftId: draft.id });
+      await manageCrisisDirect(key, 'PUBLISH_DRAFT', { draftId: draft.id, crisis: draft });
       await fetchAdminOverview();
-    }, `Published Draft Crisis to Round ${draft.round}`);
+    }, `Published Crisis "${draft.headline || draft.title || draft.id}" to Floor`);
   };
 
   // Delete Scheduled Crisis
@@ -815,7 +816,45 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   const isTradingOpen = gameState.phase === 'TRADING' && !gameState.isPaused;
   const isFloorOpen = gameState.phase === 'TRADING';
   const currentCrises = gameState.crisesByRound?.[gameState.currentRound] || [];
-  const draftCrises = gameState.draftCrises || [];
+  const draftCrises = useMemo(() => {
+    if (Array.isArray(gameState?.draftCrises) && gameState.draftCrises.length > 0) {
+      return gameState.draftCrises;
+    }
+    // Fallback: collect all staged crises from crisesByRound if draftCrises is empty
+    const collected = [];
+    if (gameState?.crisesByRound && typeof gameState.crisesByRound === 'object') {
+      [1, 2, 3].forEach((r) => {
+        const list = gameState.crisesByRound[String(r)] || gameState.crisesByRound[r] || [];
+        if (Array.isArray(list)) {
+          list.forEach((c, idx) => {
+            collected.push({
+              ...c,
+              id: c.id || `crisis-r${r}-${String(c.number || idx + 1).padStart(2, '0')}`,
+              round: Number(c.round || r),
+              number: Number(c.number || idx + 1),
+              cipherCode: c.cipherCode || `CIPHER-R${r}-0${c.number || idx + 1}`,
+              headline: c.headline || c.title || `Crisis #${c.number || idx + 1}`,
+              title: c.title || c.headline || `Crisis #${c.number || idx + 1}`,
+              description: c.description || '',
+              impacts: c.impacts || {}
+            });
+          });
+        }
+      });
+    }
+    return collected;
+  }, [gameState?.draftCrises, gameState?.crisesByRound]);
+
+  const displayedCockpitCrises = useMemo(() => {
+    const curRound = Number(gameState?.currentRound || 1);
+    if (cockpitDraftFilter === 'CURRENT') {
+      return draftCrises.filter((d) => Number(d.round || 1) === curRound);
+    }
+    if (cockpitDraftFilter === 'ALL') {
+      return draftCrises;
+    }
+    return draftCrises.filter((d) => Number(d.round || 1) === Number(cockpitDraftFilter));
+  }, [draftCrises, cockpitDraftFilter, gameState?.currentRound]);
   const releasedCrisesList = gameState.releasedCrises || [];
   const activeCrisisObj = gameState.activeCrisis || (releasedCrisesList.length > 0 ? releasedCrisesList[0] : null);
   const hasReleasedCrisis = Boolean(activeCrisisObj);
@@ -1654,11 +1693,11 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           Draft Crises Pipeline & Instant Release
                         </h3>
                         <span className="editorial-badge text-[10px] font-mono font-bold">
-                          {draftCrises.length} Draft{draftCrises.length === 1 ? '' : 's'}
+                          {displayedCockpitCrises.length} of {draftCrises.length} Available
                         </span>
                       </div>
                       <p className="text-xs text-[var(--text-muted)]">
-                        Pre-staged crisis scenarios. Select and click "Release to Floor" on any draft below to immediately broadcast it without price impact and initiate the decrypt window.
+                        Pre-staged crisis scenarios. Select and click "Release to Floor" on any scenario below to immediately broadcast it without price impact and initiate the decrypt window.
                       </p>
                     </div>
                     <button
@@ -1669,21 +1708,64 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                     </button>
                   </div>
 
-                  {draftCrises.length === 0 ? (
+                  {/* Stage & Round Filter Selector */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCockpitDraftFilter('CURRENT')}
+                      className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                        cockpitDraftFilter === 'CURRENT'
+                          ? 'bg-[var(--accent-brown)] text-white shadow-xs'
+                          : 'bg-[var(--card-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      Active Round (R{gameState.currentRound || 1}) ({draftCrises.filter((d) => Number(d.round || 1) === Number(gameState.currentRound || 1)).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCockpitDraftFilter('ALL')}
+                      className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                        cockpitDraftFilter === 'ALL'
+                          ? 'bg-[var(--accent-brown)] text-white shadow-xs'
+                          : 'bg-[var(--card-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      All Stages ({draftCrises.length})
+                    </button>
+                    {[1, 2, 3].map((r) => {
+                      const count = draftCrises.filter((d) => Number(d.round || 1) === r).length;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setCockpitDraftFilter(String(r))}
+                          className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition-all cursor-pointer ${
+                            cockpitDraftFilter === String(r)
+                              ? 'bg-[var(--accent-brown)] text-white shadow-xs'
+                              : 'bg-[var(--card-inset)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                          }`}
+                        >
+                          Round {r} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {displayedCockpitCrises.length === 0 ? (
                     <div className="p-6 rounded-lg bg-[var(--card-inset)] border border-[var(--border-subtle)] text-center space-y-2">
                       <p className="text-xs text-[var(--text-muted)]">
-                        No draft crises currently in the pipeline.
+                        No crisis scenarios found for the selected filter.
                       </p>
                       <button
-                        onClick={() => setAdminTab('crises')}
-                        className="editorial-btn editorial-btn-dark text-xs py-1.5 px-3 cursor-pointer"
+                        onClick={() => setCockpitDraftFilter('ALL')}
+                        className="editorial-btn editorial-btn-outline text-xs py-1 px-3 cursor-pointer"
                       >
-                        Open Crisis Studio to Author Drafts
+                        Show All Stages ({draftCrises.length})
                       </button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                      {draftCrises.map((draft) => {
+                      {displayedCockpitCrises.map((draft, idx) => {
                         const impacts = draft.impacts || {};
                         const impactEntries = Object.entries(impacts);
                         const isCurrentlyActive = activeCrisisObj && (
@@ -1693,7 +1775,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
 
                         return (
                           <div
-                            key={draft.id}
+                            key={draft.id || idx}
                             className={`editorial-card p-4 flex flex-col justify-between space-y-3 transition-all ${
                               isCurrentlyActive
                                 ? 'ring-2 ring-[var(--accent-brown)] bg-[var(--card-inset)]'
@@ -1707,8 +1789,13 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                     ROUND {draft.round || 1}
                                   </span>
                                   <span className="editorial-badge text-[10px] font-mono font-bold bg-[var(--card-inset)] text-[var(--text-primary)] border border-[var(--border-subtle)]">
-                                    CRISIS #{draft.number || 1}
+                                    CRISIS #{draft.number || idx + 1}
                                   </span>
+                                  {draft.cipherCode && (
+                                    <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                                      {draft.cipherCode}
+                                    </span>
+                                  )}
                                 </div>
                                 {isCurrentlyActive && (
                                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--accent-green-text)] border border-[var(--accent-green-border)]">
@@ -1718,7 +1805,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                               </div>
 
                               <h4 className="font-serif font-bold text-sm text-[var(--text-primary)] leading-snug">
-                                {cleanHeadline(draft.headline || draft.title || 'Untitled Draft')}
+                                {cleanHeadline(draft.headline || draft.title || 'Untitled Scenario')}
                               </h4>
 
                               <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
@@ -1759,7 +1846,22 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                 disabled={actionLoading}
                                 className="editorial-btn editorial-btn-green flex-1 justify-center text-xs py-1.5 cursor-pointer shadow-xs"
                               >
-                                🚀 Release to Floor
+                                Release to Floor
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCrisisRound(draft.round || 1);
+                                  setCrisisNum(draft.number || 1);
+                                  setCrisisHeadline(cleanHeadline(draft.headline || draft.title || ''));
+                                  setCrisisDesc(draft.description || '');
+                                  setCrisisImpacts(draft.impacts || {});
+                                  setSelectedStockSymbols(Object.keys(draft.impacts || {}));
+                                  setAdminTab('crises');
+                                }}
+                                className="editorial-btn editorial-btn-outline text-xs py-1.5 px-2 cursor-pointer"
+                                title="Open in Crisis Studio"
+                              >
+                                Studio
                               </button>
                               <button
                                 onClick={() => handleDeleteDraftCrisis(draft.id)}

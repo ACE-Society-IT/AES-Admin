@@ -393,7 +393,25 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
     case 'PUBLISH_DRAFT': {
       const draftId = String(params.draftId || '');
       const drafts = Array.isArray(state.draftCrises) ? state.draftCrises : [];
-      const draft = drafts.find((d) => String(d.id) === draftId);
+      let draft = drafts.find((d) => String(d.id) === draftId);
+
+      // Fallback: Check if crisis object passed directly
+      if (!draft && params.crisis && typeof params.crisis === 'object') {
+        draft = params.crisis;
+      }
+
+      // Fallback: Check inside crisesByRound
+      if (!draft && state.crisesByRound) {
+        for (const r of [1, 2, 3]) {
+          const list = state.crisesByRound[String(r)] || state.crisesByRound[r] || [];
+          const found = list.find((c) => String(c.id) === draftId || (c.headline && c.headline === params.headline));
+          if (found) {
+            draft = { ...found, round: Number(found.round || r) };
+            break;
+          }
+        }
+      }
+
       if (!draft) throw new Error('Draft crisis not found');
 
       const roundNum = Number(draft.round || state.currentRound || 1);
