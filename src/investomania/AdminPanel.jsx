@@ -89,7 +89,8 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   // Overview Data (from /overview)
   const [adminOverview, setAdminOverview] = useState(null);
   const [adminTeams, setAdminTeams] = useState([]);
-  const [adminHavens, setAdminHavens] = useState([]);
+  const [adminHavens, setAdminHavens] = useState(() => DEFAULT_TAX_HAVENS);
+  const [editingHavens, setEditingHavens] = useState({});
 
   // Modal Dialogs
   const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
@@ -522,17 +523,27 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
 
   // Update Offshore Tax Haven Settings
   const handleUpdateHaven = (haven) => {
+    const draft = editingHavens[haven.id] || {};
+    const safeLimit = draft.safeLimit !== undefined ? Number(draft.safeLimit) : Number(haven.safeLimit !== undefined ? haven.safeLimit : 25000);
+    const taxRatePercent = draft.taxRatePercent !== undefined ? Number(draft.taxRatePercent) : Number(haven.taxRatePercent !== undefined ? haven.taxRatePercent : 20);
+    const penaltyRatePercent = draft.penaltyRatePercent !== undefined ? Number(draft.penaltyRatePercent) : Number(haven.penaltyRatePercent !== undefined ? haven.penaltyRatePercent : 40);
+
     const key = getEffectivePasskey();
     runAction(async () => {
       await updateHavenDirect(key, {
         channelId: haven.id,
-        safeLimit: Number(haven.safeLimit),
-        taxRatePercent: Number(haven.taxRatePercent),
-        penaltyRatePercent: Number(haven.penaltyRatePercent)
+        safeLimit: isNaN(safeLimit) ? 0 : safeLimit,
+        taxRatePercent: isNaN(taxRatePercent) ? 0 : taxRatePercent,
+        penaltyRatePercent: isNaN(penaltyRatePercent) ? 0 : penaltyRatePercent
+      });
+      setEditingHavens((prev) => {
+        const next = { ...prev };
+        delete next[haven.id];
+        return next;
       });
       await fetchTaxHavens();
       await fetchAdminOverview();
-    }, `Updated Haven ${haven.city || haven.name} (Tax: ${haven.taxRatePercent}%, Safe Limit: $${Number(haven.safeLimit).toLocaleString()})`);
+    }, `Updated Haven ${haven.city || haven.name} (Tax: ${taxRatePercent}%, Safe Limit: $${Number(safeLimit).toLocaleString()})`);
   };
 
   // Update Stock Price
@@ -2778,73 +2789,104 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         {haven.description}
                       </p>
 
-                      <div className="space-y-2 pt-1 font-mono text-xs">
-                        <div>
-                          <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
-                            Secret Safe Wire Limit ($)
-                          </label>
-                          <input
-                            type="number"
-                            step="1000"
-                            value={haven.safeLimit !== undefined ? haven.safeLimit : 25000}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              setAdminHavens((prev) =>
-                                prev.map((h) => (h.id === haven.id ? { ...h, safeLimit: val } : h))
-                              );
-                            }}
-                            className="editorial-input w-full font-mono text-xs py-1"
-                          />
-                          <span className="text-[10px] text-[#71717A] block mt-0.5">
-                            Transfers above this limit trigger government interception!
-                          </span>
-                        </div>
+                      {(() => {
+                        const draft = editingHavens[haven.id] || {};
+                        const safeLimitVal = draft.safeLimit !== undefined ? draft.safeLimit : (haven.safeLimit !== undefined ? haven.safeLimit : 25000);
+                        const taxRateVal = draft.taxRatePercent !== undefined ? draft.taxRatePercent : (haven.taxRatePercent !== undefined ? haven.taxRatePercent : 20);
+                        const penaltyRateVal = draft.penaltyRatePercent !== undefined ? draft.penaltyRatePercent : (haven.penaltyRatePercent !== undefined ? haven.penaltyRatePercent : 40);
+                        const isModified = draft.safeLimit !== undefined || draft.taxRatePercent !== undefined || draft.penaltyRatePercent !== undefined;
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
-                              Tax Fee (%)
-                            </label>
-                            <input
-                              type="number"
-                              step="1"
-                              value={haven.taxRatePercent !== undefined ? haven.taxRatePercent : 20}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setAdminHavens((prev) =>
-                                  prev.map((h) => (h.id === haven.id ? { ...h, taxRatePercent: val } : h))
-                                );
-                              }}
-                              className="editorial-input w-full font-mono text-xs py-1"
-                            />
-                          </div>
+                        return (
+                          <>
+                            <div className="space-y-2 pt-1 font-mono text-xs">
+                              <div>
+                                <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
+                                  Secret Safe Wire Limit ($)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="1000"
+                                  min="0"
+                                  value={safeLimitVal}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditingHavens((prev) => ({
+                                      ...prev,
+                                      [haven.id]: {
+                                        ...prev[haven.id],
+                                        safeLimit: val
+                                      }
+                                    }));
+                                  }}
+                                  className="editorial-input w-full font-mono text-xs py-1"
+                                />
+                                <span className="text-[10px] text-[#71717A] block mt-0.5">
+                                  Transfers above this limit trigger government interception!
+                                </span>
+                              </div>
 
-                          <div>
-                            <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
-                              Interception Penalty (%)
-                            </label>
-                            <input
-                              type="number"
-                              step="1"
-                              value={haven.penaltyRatePercent !== undefined ? haven.penaltyRatePercent : 40}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setAdminHavens((prev) =>
-                                  prev.map((h) => (h.id === haven.id ? { ...h, penaltyRatePercent: val } : h))
-                                );
-                              }}
-                              className="editorial-input w-full font-mono text-xs py-1"
-                            />
-                          </div>
-                        </div>
-                      </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
+                                    Tax Fee (%)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    max="100"
+                                    value={taxRateVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditingHavens((prev) => ({
+                                        ...prev,
+                                        [haven.id]: {
+                                          ...prev[haven.id],
+                                          taxRatePercent: val
+                                        }
+                                      }));
+                                    }}
+                                    className="editorial-input w-full font-mono text-xs py-1"
+                                  />
+                                </div>
 
-                      <button
-                        onClick={() => handleUpdateHaven(haven)}
-                        className="editorial-btn editorial-btn-dark w-full justify-center text-xs py-1.5 mt-2"
-                      >
-                        Save Haven Parameters
-                      </button>
+                                <div>
+                                  <label className="block text-[10px] uppercase text-[#71717A] font-bold mb-0.5">
+                                    Interception Penalty (%)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    max="100"
+                                    value={penaltyRateVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditingHavens((prev) => ({
+                                        ...prev,
+                                        [haven.id]: {
+                                          ...prev[haven.id],
+                                          penaltyRatePercent: val
+                                        }
+                                      }));
+                                    }}
+                                    className="editorial-input w-full font-mono text-xs py-1"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleUpdateHaven(haven)}
+                              className={`editorial-btn w-full justify-center text-xs py-1.5 mt-2 transition-all cursor-pointer ${
+                                isModified ? 'editorial-btn-primary font-bold shadow-md' : 'editorial-btn-dark'
+                              }`}
+                            >
+                              {isModified ? 'Save Haven Parameters *' : 'Save Haven Parameters'}
+                            </button>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

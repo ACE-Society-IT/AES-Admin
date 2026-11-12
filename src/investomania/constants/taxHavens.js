@@ -172,8 +172,8 @@ export const DEFAULT_TAX_HAVENS = [
     description: 'Domestic commercial conduit routing capital locally through Pakistani interbank channels.',
     riskLevel: 'Low Risk',
     riskRewardRatio: '1:1.0',
-    taxRatePercent: 0,
+    taxRatePercent: 50,
     safeLimit: 0,
-    penaltyRatePercent: 50
+    penaltyRatePercent: 0
   }
 ];
