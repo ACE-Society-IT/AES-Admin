@@ -393,7 +393,16 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   const handleFloorAction = (actionName, payload = {}) => {
     const key = getEffectivePasskey();
     runAction(async () => {
-      await phaseActionDirect(key, actionName, payload);
+      if (
+        actionName === 'UNDO_CRISIS' ||
+        actionName === 'CLEAR_ACTIVE_CRISIS' ||
+        actionName === 'RETRACT_CRISIS' ||
+        actionName === 'ROLLBACK_CRISIS'
+      ) {
+        await manageCrisisDirect(key, 'UNDO_CRISIS', payload);
+      } else {
+        await phaseActionDirect(key, actionName, payload);
+      }
       await fetchAdminOverview();
     }, `Executed ${actionName}`);
   };
@@ -756,15 +765,27 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     }, `Deleted Crisis #${crisisSeq || index + 1} from Round ${roundNum}`);
   };
 
-  // Retract / Delete Active Crisis from Trading Floor
-  const handleRetractActiveCrisis = () => {
-    if (!window.confirm('Are you sure you want to retract and delete the active crisis from the trading floor?')) return;
+  // Undo / Rollback Active Crisis from Trading Floor
+  const handleUndoCrisis = (crisisToUndo = null) => {
+    const targetCrisis = crisisToUndo || activeCrisisObj || gameState?.activeCrisis;
+    const headline = targetCrisis?.headline || targetCrisis?.title || 'Market Crisis';
+    const shockApplied = Boolean(targetCrisis?.priceChangeApplied);
+
+    const confirmMessage = shockApplied
+      ? `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will:\n1. Remove the crisis bulletin from contestant and projector screens\n2. Revert all shocked asset prices back to pre-shock levels\n3. Recalculate all team portfolios and the leaderboard\n4. Reset the trading floor to PRE_ROUND`
+      : `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will remove the crisis bulletin from all contestant and projector screens, and reset the floor phase to PRE_ROUND.`;
+
+    if (!window.confirm(confirmMessage)) return;
+
     const key = getEffectivePasskey();
     runAction(async () => {
-      await manageCrisisDirect(key, 'CLEAR_ACTIVE_CRISIS', {});
+      await manageCrisisDirect(key, 'UNDO_CRISIS', { crisis: targetCrisis });
       await fetchAdminOverview();
-    }, 'Retracted Active Crisis from Floor');
+    }, `Undid "${headline}" from Trading Floor`);
   };
+
+  // Backward-compatible alias
+  const handleRetractActiveCrisis = (crisis = null) => handleUndoCrisis(crisis);
 
   // Save Round Timers
   const handleSaveRoundSettings = (e) => {
@@ -1301,12 +1322,12 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           </span>
                           <button
                             type="button"
-                            onClick={handleRetractActiveCrisis}
+                            onClick={() => handleUndoCrisis(activeCrisisObj)}
                             disabled={actionLoading}
-                            className="editorial-btn editorial-btn-outline text-[#B42318] text-[10px] font-mono font-bold py-0.5 px-2 cursor-pointer shadow-xs"
-                            title="Retract and delete active crisis from trading floor"
+                            className="editorial-btn editorial-btn-outline text-[#B42318] border-[#B42318] hover:bg-[#B42318] hover:text-white text-xs font-mono font-bold py-1 px-3 cursor-pointer shadow-xs transition-all"
+                            title="Undo active crisis from trading floor: revert prices, remove from feeds, reset floor"
                           >
-                            Retract from Floor
+                            Undo Crisis from Floor
                           </button>
                         </>
                       )}
@@ -1355,6 +1376,23 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           </div>
                         </div>
                       )}
+
+                      {/* Active Crisis Bottom Rollback Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border-subtle)]">
+                        <div className="text-[11px] text-[var(--text-secondary)] font-mono">
+                          {isPriceShockApplied
+                            ? 'Price shocks are active across securities. Undoing will restore pre-shock prices and recalculate team portfolios.'
+                            : 'Crisis bulletin is broadcasting to contestants. Floor is ready to open or rollback.'}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleUndoCrisis(activeCrisisObj)}
+                          disabled={actionLoading}
+                          className="editorial-btn editorial-btn-outline text-[#B42318] border-[#B42318] hover:bg-[#B42318] hover:text-white text-xs font-mono font-bold py-1.5 px-3.5 cursor-pointer shadow-xs transition-all"
+                        >
+                          Undo Crisis from Floor
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="p-4 rounded-lg bg-[var(--card-inset)] border border-[var(--border-subtle)] text-center text-xs text-[var(--text-muted)]">
@@ -1694,6 +1732,42 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                       </button>
                     </div>
                   </div>
+
+                  {/* UNDO ACTIVE CRISIS ROLLBACK BAR */}
+                  {hasReleasedCrisis && (
+                    <div className="p-4 bg-red-950/15 border border-red-900/40 rounded-lg flex flex-wrap items-center justify-between gap-3 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-[var(--text-primary)]">
+                              Active Floor Crisis: {activeCrisisObj?.headline || activeCrisisObj?.title || 'Market Crisis Event'}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                              isPriceShockApplied
+                                ? 'bg-[var(--accent-green-bg)] text-[var(--accent-green-text)] border-[var(--accent-green-border)]'
+                                : 'bg-[var(--accent-yellow-bg)] text-[var(--accent-yellow-text)] border-[var(--accent-yellow-border)]'
+                            }`}>
+                              {isPriceShockApplied ? 'PRICE SHOCK LIVE' : 'AWAITING PRICE SHOCK'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                            {isPriceShockApplied
+                              ? 'Price shocks are active across securities. Undoing will restore pre-shock prices, recompute portfolios, and reset the floor.'
+                              : 'Crisis bulletin is broadcasting to contestants. Undoing will retract the bulletin and reset the floor to PRE_ROUND.'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUndoCrisis(activeCrisisObj)}
+                        disabled={actionLoading}
+                        className="editorial-btn editorial-btn-outline text-[#B42318] border-[#B42318] hover:bg-[#B42318] hover:text-white text-xs font-mono font-bold py-2 px-4 cursor-pointer shadow-xs shrink-0 transition-all"
+                      >
+                        Undo Crisis from Trading Floor
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* ALL CRISIS DRAFTS PIPELINE & INSTANT RELEASE IN CONTROL PANEL */}
@@ -1853,13 +1927,26 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                             </div>
 
                             <div className="flex items-center gap-2 pt-2 border-t border-[var(--border-subtle)]">
-                              <button
-                                onClick={() => handlePublishDraftCrisis(draft)}
-                                disabled={actionLoading}
-                                className="editorial-btn editorial-btn-green flex-1 justify-center text-xs py-1.5 cursor-pointer shadow-xs"
-                              >
-                                Release to Floor
-                              </button>
+                              {isCurrentlyActive ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUndoCrisis(draft)}
+                                  disabled={actionLoading}
+                                  className="editorial-btn editorial-btn-outline text-[#B42318] border-[#B42318] hover:bg-[#B42318] hover:text-white flex-1 justify-center text-xs py-1.5 cursor-pointer shadow-xs font-bold"
+                                  title="Undo this crisis from the trading floor"
+                                >
+                                  Undo from Floor
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePublishDraftCrisis(draft)}
+                                  disabled={actionLoading}
+                                  className="editorial-btn editorial-btn-green flex-1 justify-center text-xs py-1.5 cursor-pointer shadow-xs"
+                                >
+                                  Release to Floor
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setCrisisRound(draft.round || 1);
@@ -2437,6 +2524,13 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                           const title = cleanHeadline(cr.headline || cr.title || `Scheduled Crisis #${cr.number || idx + 1}`);
                           const roundNum = Number(crisesViewTab);
                           const crisisNum = cr.number || idx + 1;
+                          const isCrLiveOnFloor = Boolean(
+                            activeCrisisObj && (
+                              (activeCrisisObj.id && cr.id && activeCrisisObj.id === cr.id) ||
+                              (Number(activeCrisisObj.round || gameState.currentRound) === Number(roundNum) && Number(activeCrisisObj.number) === Number(crisisNum)) ||
+                              (activeCrisisObj.headline && (activeCrisisObj.headline === title || activeCrisisObj.headline === cr.headline))
+                            )
+                          );
 
                           return (
                             <div key={cr.number || idx} className="editorial-card p-5 space-y-3.5 bg-[var(--card-bg)] border border-[var(--border-subtle)] hover:border-[var(--text-muted)] transition-all">
@@ -2453,8 +2547,12 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                     {cr.cipherCode || `CIPHER-R${roundNum}-0${crisisNum}`}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent-green-bg)] text-[var(--accent-green-text)] border border-[var(--accent-green-border)]">
-                                  SCHEDULED
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                                  isCrLiveOnFloor
+                                    ? 'bg-[var(--accent-red-bg)] text-[var(--accent-red-text)] border-[var(--accent-red-border)]'
+                                    : 'bg-[var(--accent-green-bg)] text-[var(--accent-green-text)] border-[var(--accent-green-border)]'
+                                }`}>
+                                  {isCrLiveOnFloor ? 'LIVE ON FLOOR' : 'SCHEDULED'}
                                 </span>
                               </div>
 
@@ -2519,16 +2617,28 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                                 >
                                   Load in Studio
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleFloorAction('START_DECRYPT', { crisis: cr });
-                                  }}
-                                  disabled={actionLoading}
-                                  className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 cursor-pointer shadow-xs"
-                                >
-                                  Release to Floor
-                                </button>
+                                {isCrLiveOnFloor ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUndoCrisis(cr)}
+                                    disabled={actionLoading}
+                                    className="editorial-btn editorial-btn-outline text-[#B42318] border-[#B42318] hover:bg-[#B42318] hover:text-white text-xs py-1.5 px-3 cursor-pointer shadow-xs font-bold"
+                                    title="Undo this crisis from the trading floor"
+                                  >
+                                    Undo from Floor
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleFloorAction('START_DECRYPT', { crisis: cr });
+                                    }}
+                                    disabled={actionLoading}
+                                    className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 cursor-pointer shadow-xs"
+                                  >
+                                    Release to Floor
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteScheduledCrisis(Number(crisesViewTab), cr.number, cr.id, idx)}

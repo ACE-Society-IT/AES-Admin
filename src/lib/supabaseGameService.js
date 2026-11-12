@@ -84,6 +84,26 @@ export async function authAdminDirect(passkey) {
  * Admin phase/round actions directly via Supabase RPC
  */
 export async function phaseActionDirect(passkey, action, params = {}) {
+  // Comprehensive Crisis Undo / Retract Routing
+  if (
+    action === 'UNDO_CRISIS' ||
+    action === 'CLEAR_ACTIVE_CRISIS' ||
+    action === 'RETRACT_CRISIS' ||
+    action === 'ROLLBACK_CRISIS'
+  ) {
+    return manageCrisisDirect(passkey, 'UNDO_CRISIS', params);
+  }
+
+  // Auto Close & Shock fallback helper
+  if (action === 'AUTO_CLOSE_AND_SHOCK') {
+    try {
+      await phaseActionDirect(passkey, 'CLOSE_TRADING');
+      return await phaseActionDirect(passkey, 'TRIGGER_PRICE_SHOCK');
+    } catch (e) {
+      console.warn('AUTO_CLOSE_AND_SHOCK fallback warning:', e);
+    }
+  }
+
   const { data, error } = await supabase.rpc('investomania_phase_action', {
     p_action: action,
     p_passkey: passkey,
@@ -430,10 +450,174 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
       break;
     }
 
+    case 'UNDO_CRISIS':
     case 'CLEAR_ACTIVE_CRISIS':
-    case 'RETRACT_CRISIS': {
+    case 'RETRACT_CRISIS':
+    case 'ROLLBACK_CRISIS': {
+      const targetCrisis = params.crisis || state.activeCrisis || (Array.isArray(state.releasedCrises) && state.releasedCrises.length > 0 ? state.releasedCrises[0] : null);
+      const priceShockWasApplied = Boolean(targetCrisis?.priceChangeApplied);
+      const impacts = targetCrisis?.impacts || targetCrisis?.affectedAssets || {};
+
+      // 1. Revert asset price shocks if applied
+      if (priceShockWasApplied && Array.isArray(state.assets)) {
+        state.assets = state.assets.map((asset) => {
+          const sym = String(asset.symbol || '').toUpperCase().trim();
+          const impactPct = impacts[sym] !== undefined 
+            ? Number(impacts[sym]) 
+            : (impacts[asset.symbol] !== undefined ? Number(impacts[asset.symbol]) : 0);
+
+          if (impactPct !== 0 || asset.change) {
+            const currentPrice = Number(asset.price || asset.basePrice || 100);
+            let prevPrice = currentPrice;
+            let newHistory = Array.isArray(asset.history) ? [...asset.history] : [];
+
+            // Pop latest shocked price from history stack if available
+            if (newHistory.length > 1) {
+              newHistory.pop();
+              prevPrice = Number(newHistory[newHistory.length - 1]);
+            } else if (asset.preShockPrice !== undefined && asset.preShockPrice !== null) {
+              prevPrice = Number(asset.preShockPrice);
+            } else if (asset.previousPrice !== undefined && asset.previousPrice !== null) {
+              prevPrice = Number(asset.previousPrice);
+            } else if (asset.change) {
+              prevPrice = Math.max(1, Number((currentPrice - Number(asset.change)).toFixed(2)));
+            } else if (impactPct !== 0) {
+              prevPrice = Math.max(1, Number((currentPrice / (1 + impactPct / 100)).toFixed(2)));
+            } else {
+              prevPrice = Number(asset.basePrice || currentPrice);
+            }
+
+            const finalPrice = Math.max(1, Number(prevPrice.toFixed(2)));
+            return {
+              ...asset,
+              price: finalPrice,
+              change: 0,
+              changePercent: 0,
+              preShockPrice: finalPrice,
+              previousPrice: finalPrice,
+              history: newHistory.length > 0 ? newHistory : [finalPrice]
+            };
+          }
+          return asset;
+        });
+
+        // Synchronize allStocks if present
+        if (Array.isArray(state.allStocks)) {
+          const assetPriceMap = {};
+          state.assets.forEach((a) => {
+            if (a.symbol) assetPriceMap[a.symbol.toUpperCase()] = a.price;
+          });
+          state.allStocks = state.allStocks.map((st) => {
+            const sym = String(st.symbol || '').toUpperCase();
+            if (assetPriceMap[sym] !== undefined) {
+              return {
+                ...st,
+                price: assetPriceMap[sym],
+                change: 0,
+                changePercent: 0,
+                preShockPrice: assetPriceMap[sym],
+                previousPrice: assetPriceMap[sym]
+              };
+            }
+            return st;
+          });
+        }
+
+        // Recalculate team net worth & leaderboard
+        if (state.teams && typeof state.teams === 'object') {
+          const assetPriceMap = {};
+          state.assets.forEach((a) => {
+            if (a.symbol) assetPriceMap[a.symbol.toUpperCase()] = Number(a.price);
+          });
+
+          const updatedTeams = {};
+          const leaderboardCandidate = [];
+
+          Object.entries(state.teams).forEach(([tId, team]) => {
+            const cash = Number(team.cash || 0);
+            let portfolioValue = cash;
+            const holdings = team.holdings || {};
+
+            Object.entries(holdings).forEach(([sec, pos]) => {
+              const qty = typeof pos === 'object' ? Number(pos.quantity || 0) : Number(pos || 0);
+              if (qty > 0) {
+                const secUpper = sec.toUpperCase().trim();
+                const curPrice = assetPriceMap[secUpper] !== undefined ? assetPriceMap[secUpper] : Number(pos.averageBuyPrice || 0);
+                portfolioValue += (qty * curPrice);
+              }
+            });
+
+            const netWorth = Number(portfolioValue.toFixed(2));
+            updatedTeams[tId] = {
+              ...team,
+              netWorth,
+              portfolioValue: netWorth
+            };
+
+            leaderboardCandidate.push({
+              id: tId,
+              name: team.name || tId,
+              cash,
+              netWorth,
+              round1Profit: Number(team.round1Profit || 0),
+              round2Profit: Number(team.round2Profit || 0),
+              taxShieldedTotal: Number(team.taxShielded || team.taxShieldedTotal || 0),
+              taxDeductedTotal: Number(team.taxDeducted || team.taxDeductedTotal || 0),
+              isBanned: Boolean(team.isBanned)
+            });
+          });
+
+          leaderboardCandidate.sort((a, b) => (b.netWorth || 0) - (a.netWorth || 0));
+          state.teams = updatedTeams;
+          state.leaderboard = leaderboardCandidate.map((item, rankIdx) => ({
+            ...item,
+            rank: rankIdx + 1
+          }));
+        }
+      }
+
+      // 2. Remove crisis from releasedCrises array
+      if (Array.isArray(state.releasedCrises) && targetCrisis) {
+        state.releasedCrises = state.releasedCrises.filter((c) => {
+          if (targetCrisis.id && c.id && c.id === targetCrisis.id) return false;
+          if (
+            targetCrisis.round !== undefined &&
+            targetCrisis.number !== undefined &&
+            Number(c.round) === Number(targetCrisis.round) &&
+            Number(c.number) === Number(targetCrisis.number)
+          ) return false;
+          if (
+            targetCrisis.headline &&
+            (c.headline === targetCrisis.headline || c.title === targetCrisis.headline)
+          ) return false;
+          return true;
+        });
+      }
+
+      // 3. Reset floor timers and state
       state.activeCrisis = null;
       state.priceShockCountdown = null;
+      state.isResultsRevealed = false;
+      state.phase = 'PRE_ROUND';
+      state.isPaused = false;
+      state.remainingSeconds = 0;
+      state.roundEndsAt = null;
+      state.isAutoPilot = false;
+
+      // 4. Audit ledger entry
+      const logHeadline = targetCrisis?.headline || targetCrisis?.title || 'Market Crisis';
+      const logMsg = `[CRISIS UNDO] Crisis #${targetCrisis?.number || 1} (${logHeadline}) retracted and undone from trading floor by Admin.${priceShockWasApplied ? ' Asset price shocks reverted.' : ''}`;
+      const ledger = Array.isArray(state.recentLedger) ? state.recentLedger : [];
+      state.recentLedger = [
+        {
+          id: `ledger-${Date.now()}`,
+          type: 'CRISIS_UNDO',
+          message: logMsg,
+          timestamp: new Date().toISOString()
+        },
+        ...ledger.slice(0, 49)
+      ];
+
       break;
     }
 
