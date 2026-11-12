@@ -20,12 +20,20 @@ import {
   Trash2,
   Copy,
   Check,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import aesLogo from './assets/aes-logo.png';
 import investomaniaLogo from './assets/InvestomaniaLogo.png';
 import { GameProvider } from './context/GameContext.jsx';
-import { authAdminDirect, fetchGameStateDirect, managePasskeyDirect } from './lib/supabaseGameService.js';
+import {
+  authAdminDirect,
+  fetchGameStateDirect,
+  managePasskeyDirect,
+  fetchModuleAccessDirect,
+  toggleModuleLoginDirect,
+  supabase
+} from './lib/supabaseGameService.js';
 
 // Dynamic Code-Split Lazy Imports for Fast Initial Hub Loading
 const AdminPanel = lazy(() => import('./investomania/AdminPanel.jsx'));
@@ -223,6 +231,19 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
   const [credMsg, setCredMsg] = useState({ text: '', type: '' });
   const [copiedKey, setCopiedKey] = useState(null);
 
+  // Module Login Access State (investomania, defendTheEmpire, marketMonopoly)
+  const [moduleAccess, setModuleAccess] = useState({
+    investomania: true,
+    defendTheEmpire: true,
+    marketMonopoly: true
+  });
+  const [togglingModule, setTogglingModule] = useState(null);
+  const [blockConfirmModal, setBlockConfirmModal] = useState({
+    open: false,
+    moduleKey: '',
+    moduleTitle: ''
+  });
+
   useEffect(() => {
     document.documentElement.setAttribute('data-admin-theme', themeMode);
     document.documentElement.setAttribute('data-theme', themeMode);
@@ -271,14 +292,27 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
     }
   }, []);
 
+  const fetchModuleAccess = useCallback(async () => {
+    try {
+      const access = await fetchModuleAccessDirect();
+      if (access) {
+        setModuleAccess(access);
+      }
+    } catch {
+      // non-blocking
+    }
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchTelemetry();
       fetchPasskeys();
+      fetchModuleAccess();
 
       const handleVisibility = () => {
         if (!document.hidden) {
           fetchTelemetry();
+          fetchModuleAccess();
         }
       };
       window.addEventListener('focus', handleVisibility);
@@ -287,16 +321,80 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
       const interval = setInterval(() => {
         if (!document.hidden) {
           fetchTelemetry();
+          fetchModuleAccess();
         }
-      }, 25000);
+      }, 20000);
+
+      // Realtime subscription to investomania_state changes to sync module access instantly
+      let accessChannel = null;
+      try {
+        accessChannel = supabase
+          .channel('admin-hub-module-access-realtime')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'investomania_state' },
+            (payload) => {
+              const s = payload?.new?.state_json;
+              if (s) {
+                setModuleAccess({
+                  investomania: s.moduleAccess?.investomania ?? s.loginsEnabled ?? true,
+                  defendTheEmpire: s.moduleAccess?.defendTheEmpire ?? true,
+                  marketMonopoly: s.moduleAccess?.marketMonopoly ?? true
+                });
+              }
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime module access channel error:', err.message);
+      }
 
       return () => {
         window.removeEventListener('focus', handleVisibility);
         document.removeEventListener('visibilitychange', handleVisibility);
         clearInterval(interval);
+        if (accessChannel) supabase.removeChannel(accessChannel);
       };
     }
-  }, [isAuthenticated, fetchTelemetry, fetchPasskeys]);
+  }, [isAuthenticated, fetchTelemetry, fetchPasskeys, fetchModuleAccess]);
+
+  const handleToggleModuleClick = (moduleKey, moduleTitle, isCurrentlyOpen) => {
+    if (isCurrentlyOpen) {
+      // Blocking access requires confirmation because all logged-in contestants are logged out immediately
+      setBlockConfirmModal({
+        open: true,
+        moduleKey,
+        moduleTitle
+      });
+    } else {
+      // Allowing access can be done immediately
+      executeToggleModuleAccess(moduleKey, true);
+    }
+  };
+
+  const executeToggleModuleAccess = async (moduleKey, enabled) => {
+    const token =
+      sessionStorage.getItem('alphaace_admin_token') ||
+      sessionStorage.getItem('alphaace_admin_passkey') ||
+      localStorage.getItem('alphaace_admin_token') ||
+      localStorage.getItem('alphaace_admin_passkey') ||
+      'pepe';
+
+    setTogglingModule(moduleKey);
+    try {
+      const updatedAccess = await toggleModuleLoginDirect(token, moduleKey, enabled);
+      if (updatedAccess) {
+        setModuleAccess(updatedAccess);
+      } else {
+        setModuleAccess((prev) => ({ ...prev, [moduleKey]: !!enabled }));
+      }
+      setBlockConfirmModal({ open: false, moduleKey: '', moduleTitle: '' });
+    } catch (err) {
+      alert(`Failed to update access for ${moduleKey}: ${err.message || 'Error occurred'}`);
+    } finally {
+      setTogglingModule(null);
+    }
+  };
 
   // Robust Sign-In Handler (100% Supabase Native)
   const handleLogin = async (e) => {
@@ -656,6 +754,75 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
                     <div className="text-xs font-mono font-bold text-[#16A34A] mt-0.5">Live Sockets</div>
                   </div>
                 </div>
+
+                {/* Module 1 Access Control Block */}
+                <div
+                  className="p-3 rounded-lg mb-4 flex flex-col gap-2"
+                  style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold uppercase" style={{ color: 'var(--ink-white)' }}>
+                      Contestant Logins
+                    </span>
+                    {moduleAccess.investomania !== false ? (
+                      <span
+                        className="admin-pill text-[#16A34A]"
+                        style={{ background: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.35)' }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                        LOGINS OPEN
+                      </span>
+                    ) : (
+                      <span
+                        className="admin-pill text-[#DC2626]"
+                        style={{ background: 'rgba(220, 38, 38, 0.12)', borderColor: 'rgba(220, 38, 38, 0.35)' }}
+                      >
+                        <Lock className="w-3 h-3 text-[#DC2626]" />
+                        LOGINS BLOCKED
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+                    {moduleAccess.investomania !== false
+                      ? 'Trading desks can sign in. Blocking will immediately sign out all active contestants.'
+                      : 'Trading desk logins locked. Active contestants have been logged out.'}
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={togglingModule === 'investomania'}
+                    onClick={() => handleToggleModuleClick('investomania', 'Investomania', moduleAccess.investomania !== false)}
+                    className="admin-btn w-full justify-center text-xs py-1.5"
+                    style={
+                      moduleAccess.investomania !== false
+                        ? {
+                            background: 'rgba(220, 38, 38, 0.08)',
+                            color: '#DC2626',
+                            borderColor: 'rgba(220, 38, 38, 0.3)'
+                          }
+                        : {
+                            background: 'rgba(22, 163, 74, 0.08)',
+                            color: '#16A34A',
+                            borderColor: 'rgba(22, 163, 74, 0.3)'
+                          }
+                    }
+                  >
+                    {togglingModule === 'investomania' ? (
+                      'Updating Access...'
+                    ) : moduleAccess.investomania !== false ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Block Logins & Sign-ups
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        Allow Logins & Sign-ups
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <button
@@ -709,6 +876,75 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
                     <div className="text-[10px] font-mono uppercase" style={{ color: 'var(--ink-muted)' }}>Clocks</div>
                     <div className="text-xs font-mono font-bold text-[#EAB308] mt-0.5">Synced</div>
                   </div>
+                </div>
+
+                {/* Module 2 Access Control Block */}
+                <div
+                  className="p-3 rounded-lg mb-4 flex flex-col gap-2"
+                  style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold uppercase" style={{ color: 'var(--ink-white)' }}>
+                      Contestant Logins
+                    </span>
+                    {moduleAccess.defendTheEmpire !== false ? (
+                      <span
+                        className="admin-pill text-[#16A34A]"
+                        style={{ background: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.35)' }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                        LOGINS OPEN
+                      </span>
+                    ) : (
+                      <span
+                        className="admin-pill text-[#DC2626]"
+                        style={{ background: 'rgba(220, 38, 38, 0.12)', borderColor: 'rgba(220, 38, 38, 0.35)' }}
+                      >
+                        <Lock className="w-3 h-3 text-[#DC2626]" />
+                        LOGINS BLOCKED
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+                    {moduleAccess.defendTheEmpire !== false
+                      ? 'War Room delegations can sign in. Blocking will immediately sign out all contestants.'
+                      : 'War Room logins locked. Active delegations have been logged out.'}
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={togglingModule === 'defendTheEmpire'}
+                    onClick={() => handleToggleModuleClick('defendTheEmpire', 'Defend the Empire', moduleAccess.defendTheEmpire !== false)}
+                    className="admin-btn w-full justify-center text-xs py-1.5"
+                    style={
+                      moduleAccess.defendTheEmpire !== false
+                        ? {
+                            background: 'rgba(220, 38, 38, 0.08)',
+                            color: '#DC2626',
+                            borderColor: 'rgba(220, 38, 38, 0.3)'
+                          }
+                        : {
+                            background: 'rgba(220, 38, 38, 0.08)',
+                            color: '#16A34A',
+                            borderColor: 'rgba(22, 163, 74, 0.3)'
+                          }
+                    }
+                  >
+                    {togglingModule === 'defendTheEmpire' ? (
+                      'Updating Access...'
+                    ) : moduleAccess.defendTheEmpire !== false ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Block Logins & Sign-ups
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        Allow Logins & Sign-ups
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -764,6 +1000,75 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
                     <div className="text-xs font-mono font-bold text-[#16A34A] mt-0.5">17 Items</div>
                   </div>
                 </div>
+
+                {/* Module 3 Access Control Block */}
+                <div
+                  className="p-3 rounded-lg mb-4 flex flex-col gap-2"
+                  style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold uppercase" style={{ color: 'var(--ink-white)' }}>
+                      Contestant Logins
+                    </span>
+                    {moduleAccess.marketMonopoly !== false ? (
+                      <span
+                        className="admin-pill text-[#16A34A]"
+                        style={{ background: 'rgba(22, 163, 74, 0.12)', borderColor: 'rgba(22, 163, 74, 0.35)' }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+                        LOGINS OPEN
+                      </span>
+                    ) : (
+                      <span
+                        className="admin-pill text-[#DC2626]"
+                        style={{ background: 'rgba(220, 38, 38, 0.12)', borderColor: 'rgba(220, 38, 38, 0.35)' }}
+                      >
+                        <Lock className="w-3 h-3 text-[#DC2626]" />
+                        LOGINS BLOCKED
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+                    {moduleAccess.marketMonopoly !== false
+                      ? 'Monopoly teams can sign in. Blocking will immediately sign out all contestants.'
+                      : 'Monopoly logins locked. Active contestants have been logged out.'}
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={togglingModule === 'marketMonopoly'}
+                    onClick={() => handleToggleModuleClick('marketMonopoly', 'Market Monopoly', moduleAccess.marketMonopoly !== false)}
+                    className="admin-btn w-full justify-center text-xs py-1.5"
+                    style={
+                      moduleAccess.marketMonopoly !== false
+                        ? {
+                            background: 'rgba(220, 38, 38, 0.08)',
+                            color: '#DC2626',
+                            borderColor: 'rgba(220, 38, 38, 0.3)'
+                          }
+                        : {
+                            background: 'rgba(22, 163, 74, 0.08)',
+                            color: '#16A34A',
+                            borderColor: 'rgba(22, 163, 74, 0.3)'
+                          }
+                    }
+                  >
+                    {togglingModule === 'marketMonopoly' ? (
+                      'Updating Access...'
+                    ) : moduleAccess.marketMonopoly !== false ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Block Logins & Sign-ups
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        Allow Logins & Sign-ups
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <button
@@ -799,6 +1104,80 @@ function MasterHub({ isAuthenticated, setIsAuthenticated, isCheckingAuth, onLogo
         </div>
 
       </div>
+
+      {/* Confirmation Modal for Blocking Module Logins */}
+      {blockConfirmModal.open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'var(--modal-overlay)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setBlockConfirmModal({ open: false, moduleKey: '', moduleTitle: '' })}
+        >
+          <div
+            className="w-full max-w-md rounded-xl p-6 space-y-5 shadow-2xl"
+            style={{ background: 'var(--modal-bg)', border: '1px solid var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(220, 38, 38, 0.12)', border: '1px solid rgba(220, 38, 38, 0.35)' }}
+              >
+                <Lock className="w-5 h-5 text-[#DC2626]" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold tracking-tight" style={{ color: 'var(--ink-white)' }}>
+                  Block {blockConfirmModal.moduleTitle} Logins?
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--ink-muted)' }}>
+                  Immediate Participant Disconnection
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="p-3.5 rounded-lg text-xs leading-relaxed space-y-2"
+              style={{ background: 'var(--card-inset)', border: '1px solid var(--border)' }}
+            >
+              <p style={{ color: 'var(--ink-bone)' }}>
+                Are you sure you want to block logins and registrations for <strong>{blockConfirmModal.moduleTitle}</strong>?
+              </p>
+              <p className="text-[#DC2626] font-semibold">
+                Warning: Any contestant currently signed into this module will be automatically signed out immediately in real time.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setBlockConfirmModal({ open: false, moduleKey: '', moduleTitle: '' })}
+                className="admin-btn admin-btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={togglingModule === blockConfirmModal.moduleKey}
+                onClick={() => executeToggleModuleAccess(blockConfirmModal.moduleKey, false)}
+                className="admin-btn text-xs font-bold"
+                style={{
+                  background: '#DC2626',
+                  color: '#FFFFFF',
+                  borderColor: '#DC2626'
+                }}
+              >
+                {togglingModule === blockConfirmModal.moduleKey ? (
+                  'Disconnecting...'
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 mr-1" />
+                    Confirm & Block Logins
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Admin Credentials Management Modal */}
       {showCredModal && (

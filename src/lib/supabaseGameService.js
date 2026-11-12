@@ -144,6 +144,31 @@ export async function phaseActionDirect(passkey, action, params = {}) {
     }
   }
 
+  // Extra safety: When toggling Investomania logins, synchronize moduleAccess.investomania
+  if (action === 'TOGGLE_LOGINS') {
+    try {
+      const { data: stateRow } = await supabaseAdmin
+        .from('investomania_state')
+        .select('state_json')
+        .eq('id', 1)
+        .single();
+      if (stateRow?.state_json) {
+        const s = stateRow.state_json;
+        s.moduleAccess = {
+          ...(s.moduleAccess || { investomania: true, defendTheEmpire: true, marketMonopoly: true }),
+          investomania: !!s.loginsEnabled
+        };
+        await supabaseAdmin
+          .from('investomania_state')
+          .update({ state_json: s, updated_at: new Date().toISOString() })
+          .eq('id', 1);
+        data.data = s;
+      }
+    } catch (e) {
+      console.warn('TOGGLE_LOGINS moduleAccess sync warning:', e);
+    }
+  }
+
   invalidateAdminStateCache();
   return data.data;
 }
@@ -867,3 +892,126 @@ export async function fetchTeamsDirect(forceFresh = false) {
   _adminTeamsPromise = run();
   return _adminTeamsPromise;
 }
+
+/**
+ * Fetch current module access and login permissions directly from Supabase
+ */
+export async function fetchModuleAccessDirect() {
+  try {
+    const { data, error } = await supabase
+      .from('investomania_state')
+      .select('state_json')
+      .eq('id', 1)
+      .single();
+
+    if (error || !data?.state_json) {
+      return {
+        investomania: true,
+        defendTheEmpire: true,
+        marketMonopoly: true
+      };
+    }
+
+    const s = data.state_json;
+    return {
+      investomania: s.moduleAccess?.investomania ?? s.loginsEnabled ?? true,
+      defendTheEmpire: s.moduleAccess?.defendTheEmpire ?? true,
+      marketMonopoly: s.moduleAccess?.marketMonopoly ?? true
+    };
+  } catch (err) {
+    console.warn('fetchModuleAccessDirect warning:', err.message);
+    return {
+      investomania: true,
+      defendTheEmpire: true,
+      marketMonopoly: true
+    };
+  }
+}
+
+/**
+ * Toggle Module Login/Signup Access directly via Supabase
+ * When blocked, active participant sessions in that module are immediately revoked.
+ * moduleKey: 'investomania' | 'defendTheEmpire' | 'marketMonopoly'
+ * enabled: boolean
+ */
+export async function toggleModuleLoginDirect(passkey, moduleKey, enabled) {
+  // 1. Authorize Admin
+  await authAdminDirect(passkey);
+
+  // 2. Fetch authoritative state from investomania_state
+  const { data: stateRow, error: stateFetchErr } = await supabaseAdmin
+    .from('investomania_state')
+    .select('state_json')
+    .eq('id', 1)
+    .single();
+
+  if (stateFetchErr) throw formatDbError(stateFetchErr, 'Failed to fetch current module access state');
+
+  const currentState = stateRow?.state_json || {};
+  const currentAccess = currentState.moduleAccess || {
+    investomania: true,
+    defendTheEmpire: true,
+    marketMonopoly: true
+  };
+
+  const nextAccess = {
+    ...currentAccess,
+    [moduleKey]: !!enabled
+  };
+
+  const nextState = {
+    ...currentState,
+    moduleAccess: nextAccess
+  };
+
+  // If toggling Investomania, also sync the legacy loginsEnabled flag
+  if (moduleKey === 'investomania') {
+    nextState.loginsEnabled = !!enabled;
+  }
+
+  // 3. Persist update in investomania_state
+  const { error: stateUpdateErr } = await supabaseAdmin
+    .from('investomania_state')
+    .update({
+      state_json: nextState,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', 1);
+
+  if (stateUpdateErr) throw formatDbError(stateUpdateErr, `Failed to update login access for ${moduleKey}`);
+
+  // 4. If moduleKey is 'marketMonopoly', also sync monopoly_state loginsEnabled & moduleAccess
+  if (moduleKey === 'marketMonopoly') {
+    try {
+      const { data: monoRow } = await supabaseAdmin
+        .from('monopoly_state')
+        .select('state_json')
+        .eq('id', 1)
+        .single();
+
+      if (monoRow?.state_json) {
+        const nextMonoState = {
+          ...monoRow.state_json,
+          loginsEnabled: !!enabled,
+          moduleAccess: {
+            ...(monoRow.state_json.moduleAccess || {}),
+            marketMonopoly: !!enabled
+          }
+        };
+        await supabaseAdmin
+          .from('monopoly_state')
+          .update({
+            state_json: nextMonoState,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', 1);
+      }
+    } catch (monoErr) {
+      console.warn('Sync monopoly_state loginsEnabled warning:', monoErr.message);
+    }
+  }
+
+  invalidateAdminStateCache();
+  return nextAccess;
+}
+
