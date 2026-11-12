@@ -392,19 +392,26 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
   // Master Floor Control Action
   const handleFloorAction = (actionName, payload = {}) => {
     const key = getEffectivePasskey();
+    let normalizedAction = actionName;
+    if (actionName === 'START_TRADING_UNTIMED') normalizedAction = 'START_TRADING';
+    if (actionName === 'STOP_TRADING') normalizedAction = 'CLOSE_TRADING';
+    if (actionName === 'PAUSE_RESUME') {
+      normalizedAction = gameState?.isPaused ? 'RESUME_TIMER' : 'PAUSE_TIMER';
+    }
+
     runAction(async () => {
       if (
-        actionName === 'UNDO_CRISIS' ||
-        actionName === 'CLEAR_ACTIVE_CRISIS' ||
-        actionName === 'RETRACT_CRISIS' ||
-        actionName === 'ROLLBACK_CRISIS'
+        normalizedAction === 'UNDO_CRISIS' ||
+        normalizedAction === 'CLEAR_ACTIVE_CRISIS' ||
+        normalizedAction === 'RETRACT_CRISIS' ||
+        normalizedAction === 'ROLLBACK_CRISIS'
       ) {
         await manageCrisisDirect(key, 'UNDO_CRISIS', payload);
       } else {
-        await phaseActionDirect(key, actionName, payload);
+        await phaseActionDirect(key, normalizedAction, payload);
       }
       await fetchAdminOverview();
-    }, `Executed ${actionName}`);
+    }, `Executed ${normalizedAction}`);
   };
 
   // Switch Round
@@ -1125,17 +1132,17 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
             {/* SINGLE BUTTON: Open Floor (Start Trading) <-> Stop Floor (Lock Trading) */}
             {isTradingOpen ? (
               <button
-                onClick={() => handleFloorAction('STOP_TRADING')}
+                onClick={() => handleFloorAction('CLOSE_TRADING')}
                 disabled={actionLoading}
-                className="editorial-btn editorial-btn-red justify-center py-3 text-xs font-bold"
+                className="editorial-btn editorial-btn-red justify-center py-3 text-xs font-bold cursor-pointer"
               >
                 Stop Floor (Lock Trading)
               </button>
             ) : (
               <button
-                onClick={() => handleFloorAction('START_TRADING_UNTIMED')}
+                onClick={() => handleFloorAction('START_TRADING')}
                 disabled={actionLoading}
-                className="editorial-btn editorial-btn-green justify-center py-3 text-xs font-bold"
+                className="editorial-btn editorial-btn-green justify-center py-3 text-xs font-bold cursor-pointer"
               >
                 Open Floor (Start Trading)
               </button>
@@ -1143,11 +1150,11 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
 
             {/* Pause / Resume */}
             <button
-              onClick={() => handleFloorAction('PAUSE_RESUME')}
+              onClick={() => handleFloorAction(gameState?.isPaused ? 'RESUME_TIMER' : 'PAUSE_TIMER')}
               disabled={actionLoading}
-              className="editorial-btn editorial-btn-outline justify-center py-3 text-xs font-bold"
+              className="editorial-btn editorial-btn-outline justify-center py-3 text-xs font-bold cursor-pointer"
             >
-              {gameState.isPaused ? 'Resume Clock' : 'Pause Clock'}
+              {gameState?.isPaused ? 'Resume Clock' : 'Pause Clock'}
             </button>
 
             {/* Start Decrypt Phase (3m) */}
@@ -1642,9 +1649,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
 
                     {/* Step 2: Open Trading Floor (Timed Window) */}
                     <div className={`editorial-card p-4 space-y-2.5 bg-[var(--card-inset)] border transition-all ${
-                      !hasReleasedCrisis
-                        ? 'opacity-50 border-[var(--border-subtle)]'
-                        : isFloorOpen
+                      isFloorOpen
                         ? 'border-[var(--accent-green-border)] ring-1 ring-[var(--accent-green-border)]'
                         : 'border-[var(--border-subtle)]'
                     }`}>
@@ -1652,11 +1657,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold block">
                           Step 2 · Trading Floor ({gameState.roundSettings?.[gameState.currentRound]?.tradingSeconds ? `${Math.round(gameState.roundSettings[gameState.currentRound].tradingSeconds / 60)}m` : '5m'})
                         </span>
-                        {!hasReleasedCrisis ? (
-                          <span className="text-[10px] font-mono font-bold text-[var(--text-muted)]">
-                            LOCKED (STEP 1)
-                          </span>
-                        ) : isFloorOpen ? (
+                        {isFloorOpen ? (
                           <span className="text-[10px] font-mono font-bold text-[var(--accent-green-text)]">
                             FLOOR OPEN
                           </span>
@@ -1667,12 +1668,12 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                         )}
                       </div>
                       <p className="text-xs text-[var(--text-secondary)]">
-                        Unlocks when crisis is released. Admin can open or close trading floor at will; trading countdown runs.
+                        Admin can open or close trading floor at will; trading countdown runs.
                       </p>
                       {isFloorOpen ? (
                         <button
                           onClick={() => handleFloorAction('CLOSE_TRADING')}
-                          disabled={!hasReleasedCrisis || actionLoading}
+                          disabled={actionLoading}
                           className="editorial-btn editorial-btn-outline border-[var(--accent-red-border)] text-[var(--accent-red-text)] w-full justify-center text-xs py-2 cursor-pointer"
                         >
                           Close Trading Floor
@@ -1680,7 +1681,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                       ) : (
                         <button
                           onClick={() => handleFloorAction('START_TRADING')}
-                          disabled={!hasReleasedCrisis || actionLoading}
+                          disabled={actionLoading}
                           className="editorial-btn editorial-btn-green w-full justify-center text-xs py-2 cursor-pointer shadow-xs"
                         >
                           2. Open Trading Floor
