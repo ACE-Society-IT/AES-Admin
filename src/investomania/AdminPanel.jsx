@@ -772,8 +772,8 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     const shockApplied = Boolean(targetCrisis?.priceChangeApplied);
 
     const confirmMessage = shockApplied
-      ? `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will:\n1. Remove the crisis bulletin from contestant and projector screens\n2. Revert all shocked asset prices back to pre-shock levels\n3. Recalculate all team portfolios and the leaderboard\n4. Reset the trading floor to PRE_ROUND`
-      : `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will remove the crisis bulletin from all contestant and projector screens, and reset the floor phase to PRE_ROUND.`;
+      ? `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will:\n1. Remove the crisis bulletin from contestant and projector screens\n2. Revert all shocked asset prices back to pre-shock levels\n3. Recalculate all team portfolios and the leaderboard\n4. Reset the trading floor to PRE_ROUND\n5. Return the crisis to Drafts so you can edit, reschedule, or re-release it`
+      : `Are you sure you want to undo and remove "${headline}" from the trading floor?\n\nThis will remove the crisis bulletin from all contestant and projector screens, return it to Drafts, and reset the floor phase to PRE_ROUND.`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -781,7 +781,7 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     runAction(async () => {
       await manageCrisisDirect(key, 'UNDO_CRISIS', { crisis: targetCrisis });
       await fetchAdminOverview();
-    }, `Undid "${headline}" from Trading Floor`);
+    }, `Undid "${headline}" from Floor (returned to Drafts)`);
   };
 
   // Backward-compatible alias

@@ -594,7 +594,63 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
         });
       }
 
-      // 3. Reset floor timers and state
+      // 3. Return / Preserve the undone crisis in draftCrises so it is ready to be edited or re-released
+      if (targetCrisis) {
+        const cleanDraft = {
+          ...targetCrisis,
+          id: targetCrisis.id || `draft-${Date.now()}`,
+          isLiveReleased: false,
+          priceChangeApplied: false,
+          updatedAt: new Date().toISOString()
+        };
+
+        const currentDrafts = Array.isArray(state.draftCrises) ? [...state.draftCrises] : [];
+        const existingIdx = currentDrafts.findIndex((d) => {
+          if (cleanDraft.id && d.id && d.id === cleanDraft.id) return true;
+          if (
+            cleanDraft.round !== undefined &&
+            cleanDraft.number !== undefined &&
+            Number(d.round) === Number(cleanDraft.round) &&
+            Number(d.number) === Number(cleanDraft.number)
+          ) return true;
+          if (cleanDraft.headline && (d.headline === cleanDraft.headline || d.title === cleanDraft.headline)) return true;
+          return false;
+        });
+
+        if (existingIdx >= 0) {
+          currentDrafts[existingIdx] = {
+            ...currentDrafts[existingIdx],
+            ...cleanDraft,
+            isLiveReleased: false,
+            priceChangeApplied: false
+          };
+        } else {
+          currentDrafts.unshift(cleanDraft);
+        }
+        state.draftCrises = currentDrafts;
+
+        // Also ensure any matching crisis in crisesByRound is marked as not live
+        if (state.crisesByRound) {
+          const roundKey = String(targetCrisis.round || state.currentRound || 1);
+          if (Array.isArray(state.crisesByRound[roundKey])) {
+            state.crisesByRound[roundKey] = state.crisesByRound[roundKey].map((c) => {
+              const matchId = targetCrisis.id && c.id && c.id === targetCrisis.id;
+              const matchNum = Number(c.number) === Number(targetCrisis.number);
+              const matchHeadline = targetCrisis.headline && (c.headline === targetCrisis.headline || c.title === targetCrisis.headline);
+              if (matchId || (matchNum && matchHeadline)) {
+                return {
+                  ...c,
+                  isLiveReleased: false,
+                  priceChangeApplied: false
+                };
+              }
+              return c;
+            });
+          }
+        }
+      }
+
+      // 4. Reset floor timers and state
       state.activeCrisis = null;
       state.priceShockCountdown = null;
       state.isResultsRevealed = false;
@@ -604,7 +660,7 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
       state.roundEndsAt = null;
       state.isAutoPilot = false;
 
-      // 4. Audit ledger entry
+      // 5. Audit ledger entry
       const logHeadline = targetCrisis?.headline || targetCrisis?.title || 'Market Crisis';
       const logMsg = `[CRISIS UNDO] Crisis #${targetCrisis?.number || 1} (${logHeadline}) retracted and undone from trading floor by Admin.${priceShockWasApplied ? ' Asset price shocks reverted.' : ''}`;
       const ledger = Array.isArray(state.recentLedger) ? state.recentLedger : [];
