@@ -1,4 +1,4 @@
-// 10 Canonical Offshore Tax Haven Cities for Investomania Round 3 (Accurate & Anti-Overlap Spaced)
+// Tax Havens and Domestic Smuggling Channels for Investomania Round 3 (Accurate & Anti-Overlap Spaced)
 export const DEFAULT_TAX_HAVENS = [
   {
     id: 1,
@@ -159,5 +159,21 @@ export const DEFAULT_TAX_HAVENS = [
     taxRatePercent: 9,
     safeLimit: 30000,
     penaltyRatePercent: 42
+  },
+  {
+    id: 11,
+    name: 'Pakistan Domestic Transfer',
+    city: 'Pakistan',
+    country: 'Pakistan',
+    airportCode: 'PAK',
+    flag: 'PAK',
+    x: 83.0,
+    y: 26.85,
+    description: 'Domestic commercial conduit routing capital locally through Pakistani interbank channels.',
+    riskLevel: 'Low Risk',
+    riskRewardRatio: '1:1.0',
+    taxRatePercent: 0,
+    safeLimit: 0,
+    penaltyRatePercent: 50
   }
 ];
