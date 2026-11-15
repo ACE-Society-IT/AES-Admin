@@ -605,8 +605,8 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
       if (priceShockWasApplied && Array.isArray(state.assets)) {
         state.assets = state.assets.map((asset) => {
           const sym = String(asset.symbol || '').toUpperCase().trim();
-          const impactPct = impacts[sym] !== undefined 
-            ? Number(impacts[sym]) 
+          const impactPct = impacts[sym] !== undefined
+            ? Number(impacts[sym])
             : (impacts[asset.symbol] !== undefined ? Number(impacts[asset.symbol]) : 0);
 
           if (impactPct !== 0 || asset.change) {
