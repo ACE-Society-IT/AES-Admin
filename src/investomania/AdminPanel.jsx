@@ -543,6 +543,28 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
       : `Reset all desks cash to PKR ${budgetNum.toLocaleString()}`);
   };
 
+  // Apply Round 3 Carryover Formula (PKR 100k + R1 Profit + R2 Profit)
+  const handleApplyRoundCarryover = () => {
+    const confirmMsg =
+      'CONFIRM ROUND 3 CARRYOVER SETUP:\n\n' +
+      'Apply official tournament carryover formula to all desks:\n' +
+      'Starting Desk Cash = PKR 100,000 + Round 1 Profit + Round 2 Profit\n\n' +
+      '1. Each team gets their exact accumulated profits credited into liquid cash.\n' +
+      '2. Round 2 holdings are cleared ({}) for Round 3.\n' +
+      '3. Offshore tax shielding and penalties are reset for Round 3.\n' +
+      '4. Past round profits remain permanently locked and preserved.\n\n' +
+      'Proceed?';
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+    const key = getEffectivePasskey();
+    runAction(async () => {
+      await manageTeamDirect(key, 'APPLY_ROUND_CARRYOVER', {});
+      await fetchAdminOverview();
+    }, 'Applied Round 3 carryover budgets (PKR 100k + R1 & R2 profits) to all desks');
+  };
+
   // Update Offshore Tax Haven Settings
   const handleUpdateHaven = (haven) => {
     const draft = editingHavens[haven.id] || {};
@@ -1162,6 +1184,15 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                 className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
               >
                 Clear Holdings &amp; Set Budget for Round
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyRoundCarryover}
+                disabled={actionLoading}
+                className="editorial-btn editorial-btn-yellow text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
+                title="Credits each desk with PKR 100,000 + Round 1 Profit + Round 2 Profit and clears holdings for Round 3"
+              >
+                Apply R3 Carryover (100k + Profits)
               </button>
             </div>
           </div>
@@ -3181,6 +3212,15 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                       className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
                     >
                       Clear Holdings &amp; Set Budget for Round
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyRoundCarryover}
+                      disabled={actionLoading}
+                      className="editorial-btn editorial-btn-yellow text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
+                      title="Credits each desk with PKR 100,000 + Round 1 Profit + Round 2 Profit and clears holdings for Round 3"
+                    >
+                      Apply R3 Carryover (100k + Profits)
                     </button>
                   </div>
                 </div>

@@ -324,6 +324,97 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
     return updatedState;
   }
 
+  if (action === 'APPLY_ROUND_CARRYOVER') {
+    await authAdminDirect(passkey);
+
+    const { data: teamsList, error: fetchTeamsErr } = await supabaseAdmin
+      .from('investomania_teams')
+      .select('id, round1_profit, round2_profit');
+
+    if (fetchTeamsErr) throw formatDbError(fetchTeamsErr, 'Failed to fetch team profits');
+
+    const carryoverMap = {};
+    for (const t of (teamsList || [])) {
+      const budget = Math.max(1000, 100000 + Number(t.round1_profit || 0) + Number(t.round2_profit || 0));
+      carryoverMap[t.id] = budget;
+      await supabaseAdmin
+        .from('investomania_teams')
+        .update({
+          cash: budget,
+          initial_budget: budget,
+          holdings: {},
+          tax_shielded: 0,
+          tax_deducted: 0,
+          tax_history: [],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', t.id);
+    }
+
+    const { data: stateRow, error: stateFetchErr } = await supabaseAdmin
+      .from('investomania_state')
+      .select('state_json')
+      .eq('id', 1)
+      .single();
+
+    if (stateFetchErr) throw formatDbError(stateFetchErr, 'Failed to fetch state for carryover update');
+
+    let updatedState = stateRow?.state_json || {};
+    if (updatedState.teams && typeof updatedState.teams === 'object') {
+      const nextTeams = {};
+      Object.keys(updatedState.teams).forEach((id) => {
+        const teamBudget = carryoverMap[id] ?? 100000;
+        nextTeams[id] = {
+          ...updatedState.teams[id],
+          cash: teamBudget,
+          initialRoundBudget: teamBudget,
+          holdings: {},
+          portfolioValue: teamBudget,
+          totalPortfolioValue: teamBudget,
+          netWorth: teamBudget,
+          taxShielded: 0,
+          taxDeducted: 0,
+          taxHistory: []
+        };
+      });
+      updatedState = { ...updatedState, teams: nextTeams };
+    }
+
+    if (Array.isArray(updatedState.leaderboard)) {
+      updatedState = {
+        ...updatedState,
+        leaderboard: updatedState.leaderboard.map((t) => {
+          const teamBudget = carryoverMap[t.id] ?? 100000;
+          return {
+            ...t,
+            cash: teamBudget,
+            initialRoundBudget: teamBudget,
+            portfolioValue: teamBudget,
+            totalPortfolioValue: teamBudget,
+            netWorth: teamBudget,
+            holdings: {},
+            taxShielded: 0,
+            taxDeducted: 0,
+            taxHistory: []
+          };
+        })
+      };
+    }
+
+    const { error: stateUpdateErr } = await supabaseAdmin
+      .from('investomania_state')
+      .update({
+        state_json: updatedState,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', 1);
+
+    if (stateUpdateErr) throw formatDbError(stateUpdateErr, 'Failed to update state after carryover update');
+
+    invalidateAdminStateCache();
+    return updatedState;
+  }
+
   const { data, error } = await supabase.rpc('investomania_manage_team', {
     p_passkey: passkey,
     p_action: action,
