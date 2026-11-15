@@ -258,12 +258,12 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     window.addEventListener('focus', handleVisibility);
     document.addEventListener('visibilitychange', handleVisibility);
 
-    // Responsive failover heartbeat (4s) so admin dashboard never lags behind floor events
+    // Responsive failover heartbeat (12s) with updated_at check so egress is near zero
     const poll = setInterval(() => {
       if (!document.hidden) {
         fetchAdminOverview(false);
       }
-    }, 4000);
+    }, 12000);
 
     return () => {
       if (channel) supabase.removeChannel(channel);

@@ -17,15 +17,17 @@ function formatDbError(err, fallbackMsg = 'Database operation failed') {
 let _adminGameStateCache = null;
 let _adminGameStateCachedAt = 0;
 let _adminGameStatePromise = null;
+let _adminLastKnownUpdatedAt = null;
 let _adminTeamsCache = null;
 let _adminTeamsCachedAt = 0;
 let _adminTeamsPromise = null;
-const CACHE_TTL_MS = 0;
+const CACHE_TTL_MS = 2500;
 
 export function invalidateAdminStateCache() {
   _adminGameStateCache = null;
   _adminGameStateCachedAt = 0;
   _adminGameStatePromise = null;
+  _adminLastKnownUpdatedAt = null;
   _adminTeamsCache = null;
   _adminTeamsCachedAt = 0;
   _adminTeamsPromise = null;
@@ -33,6 +35,7 @@ export function invalidateAdminStateCache() {
 
 /**
  * Fetch authoritative game state directly from Supabase
+ * Bandwidth Guard: checks updated_at (49 bytes) before downloading full state_json (130 KB)
  */
 export async function fetchGameStateDirect(forceFresh = false) {
   if (forceFresh) {
@@ -48,13 +51,29 @@ export async function fetchGameStateDirect(forceFresh = false) {
 
   const run = async () => {
     try {
+      if (!forceFresh && _adminGameStateCache && _adminLastKnownUpdatedAt) {
+        const { data: meta, error: metaErr } = await supabase
+          .from('investomania_state')
+          .select('updated_at')
+          .eq('id', 1)
+          .single();
+
+        if (!metaErr && meta?.updated_at && meta.updated_at === _adminLastKnownUpdatedAt) {
+          _adminGameStateCachedAt = Date.now();
+          return _adminGameStateCache;
+        }
+      }
+
       const { data, error } = await supabase
         .from('investomania_state')
-        .select('state_json')
+        .select('state_json, updated_at')
         .eq('id', 1)
         .single();
 
       if (error) throw formatDbError(error, 'Failed to fetch game floor state');
+      if (data?.updated_at) {
+        _adminLastKnownUpdatedAt = data.updated_at;
+      }
       _adminGameStateCache = data?.state_json || null;
       _adminGameStateCachedAt = Date.now();
       return _adminGameStateCache;
