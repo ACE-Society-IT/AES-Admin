@@ -232,18 +232,27 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
     return updatedState;
   }
 
-  if (action === 'UPDATE_ALL_BUDGETS') {
+  if (action === 'UPDATE_ALL_BUDGETS' || action === 'RESET_ROUND_DESKS') {
     await authAdminDirect(passkey);
     const newBudget = Number(teamData.budget ?? teamData.initialBudget ?? teamData.cash ?? 100000);
+    const shouldClearHoldings = Boolean(teamData.clearHoldings || action === 'RESET_ROUND_DESKS');
 
     // 1. Update all teams in investomania_teams table
+    const updatePayload = {
+      cash: newBudget,
+      initial_budget: newBudget,
+      updated_at: new Date().toISOString()
+    };
+    if (shouldClearHoldings) {
+      updatePayload.holdings = {};
+      updatePayload.tax_shielded = 0;
+      updatePayload.tax_deducted = 0;
+      updatePayload.tax_history = [];
+    }
+
     const { error: teamsUpdateErr } = await supabaseAdmin
       .from('investomania_teams')
-      .update({
-        cash: newBudget,
-        initial_budget: newBudget,
-        updated_at: new Date().toISOString()
-      })
+      .update(updatePayload)
       .neq('id', '');
 
     if (teamsUpdateErr) {
@@ -266,7 +275,16 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
         nextTeams[id] = {
           ...updatedState.teams[id],
           cash: newBudget,
-          initialRoundBudget: newBudget
+          initialRoundBudget: newBudget,
+          ...(shouldClearHoldings ? {
+            holdings: {},
+            portfolioValue: newBudget,
+            totalPortfolioValue: newBudget,
+            netWorth: newBudget,
+            taxShielded: 0,
+            taxDeducted: 0,
+            taxHistory: []
+          } : {})
         };
       });
       updatedState = { ...updatedState, teams: nextTeams };
@@ -278,7 +296,16 @@ export async function manageTeamDirect(passkey, action, teamData = {}) {
         leaderboard: updatedState.leaderboard.map((t) => ({
           ...t,
           cash: newBudget,
-          initialRoundBudget: newBudget
+          initialRoundBudget: newBudget,
+          ...(shouldClearHoldings ? {
+            holdings: {},
+            portfolioValue: newBudget,
+            totalPortfolioValue: newBudget,
+            netWorth: newBudget,
+            taxShielded: 0,
+            taxDeducted: 0,
+            taxHistory: []
+          } : {})
         }))
       };
     }

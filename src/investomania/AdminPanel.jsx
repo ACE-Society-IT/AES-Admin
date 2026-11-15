@@ -520,21 +520,27 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
     }, `Updated budget for ${teamId}`);
   };
 
-  // Bulk Update All Teams Budget
-  const handleBulkUpdateAllBudgets = () => {
+  // Bulk Update All Teams Budget & Optional Holdings Clear
+  const handleBulkUpdateAllBudgets = (clearHoldings = false) => {
     const budgetNum = Number(bulkBudgetValue);
     if (isNaN(budgetNum) || budgetNum < 0) {
       addToast('Error', 'Please enter a valid budget amount', 'error');
       return;
     }
-    if (!window.confirm(`Reset ALL competitor desks to starting budget of PKR ${budgetNum.toLocaleString()}?`)) {
+    const confirmMsg = clearHoldings
+      ? `CONFIRM ROUND TRANSITION:\n1. Reset ALL competitor desks cash to PKR ${budgetNum.toLocaleString()}\n2. REMOVE and CLEAR ALL stock holdings to empty ({})\n\nPast Round 1 and Round 2 profits will be safely preserved. Proceed?`
+      : `Reset ALL competitor desks cash to PKR ${budgetNum.toLocaleString()} (keep current holdings)?`;
+
+    if (!window.confirm(confirmMsg)) {
       return;
     }
     const key = getEffectivePasskey();
     runAction(async () => {
-      await manageTeamDirect(key, 'UPDATE_ALL_BUDGETS', { budget: budgetNum });
+      await manageTeamDirect(key, 'UPDATE_ALL_BUDGETS', { budget: budgetNum, clearHoldings });
       await fetchAdminOverview();
-    }, `Reset all teams budget to PKR ${budgetNum.toLocaleString()}`);
+    }, clearHoldings 
+      ? `Cleared all desk holdings & set budget to PKR ${budgetNum.toLocaleString()}` 
+      : `Reset all desks cash to PKR ${budgetNum.toLocaleString()}`);
   };
 
   // Update Offshore Tax Haven Settings
@@ -1119,6 +1125,44 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                   {rd.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Quick Round Transition & Desk Reset Cockpit Bar */}
+          <div className="p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--card-inset)] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="font-mono font-bold uppercase text-[10px] text-[var(--accent-yellow-text)] tracking-wider">
+                Round Setup &amp; Desks:
+              </span>
+              <span className="text-[var(--text-secondary)]">Set all desks cash to:</span>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-xs text-[var(--text-muted)]">PKR</span>
+                <input
+                  type="number"
+                  step="5000"
+                  value={bulkBudgetValue}
+                  onChange={(e) => setBulkBudgetValue(e.target.value)}
+                  className="editorial-input font-mono text-xs w-28 py-1"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleBulkUpdateAllBudgets(false)}
+                disabled={actionLoading}
+                className="editorial-btn editorial-btn-outline text-xs py-1.5 px-3 cursor-pointer"
+              >
+                Reset Cash Only
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkUpdateAllBudgets(true)}
+                disabled={actionLoading}
+                className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
+              >
+                Clear Holdings &amp; Set Budget for Round
+              </button>
             </div>
           </div>
 
@@ -3103,27 +3147,42 @@ export default function AdminPanel({ onBackToHub, onLogout }) {
                   </div>
                 </div>
 
-                {/* Bulk Budget Reset Bar */}
+                {/* Bulk Budget & Holdings Reset Bar */}
                 <div className="p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--card-inset)] flex flex-wrap items-center justify-between gap-3 text-[var(--text-primary)]">
-                  <div className="flex items-center gap-2 font-mono text-xs">
+                  <div className="flex items-center gap-2.5 flex-wrap font-mono text-xs">
                     <span className="font-bold text-[var(--text-muted)] uppercase text-[10px]">
-                      Bulk Reset:
+                      Desk Setup &amp; Budget:
                     </span>
                     <span className="text-[var(--text-secondary)]">Set all desks cash to:</span>
-                    <input
-                      type="number"
-                      step="5000"
-                      value={bulkBudgetValue}
-                      onChange={(e) => setBulkBudgetValue(e.target.value)}
-                      className="editorial-input font-mono text-xs w-32 py-1"
-                    />
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-xs text-[var(--text-muted)]">PKR</span>
+                      <input
+                        type="number"
+                        step="5000"
+                        value={bulkBudgetValue}
+                        onChange={(e) => setBulkBudgetValue(e.target.value)}
+                        className="editorial-input font-mono text-xs w-32 py-1"
+                      />
+                    </div>
                   </div>
-                  <button
-                    onClick={handleBulkUpdateAllBudgets}
-                    className="editorial-btn editorial-btn-outline text-xs py-1 px-3"
-                  >
-                    Reset All Desks Budget
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleBulkUpdateAllBudgets(false)}
+                      disabled={actionLoading}
+                      className="editorial-btn editorial-btn-outline text-xs py-1.5 px-3 cursor-pointer"
+                    >
+                      Reset Cash Only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkUpdateAllBudgets(true)}
+                      disabled={actionLoading}
+                      className="editorial-btn editorial-btn-green text-xs py-1.5 px-3 font-bold cursor-pointer shadow-xs"
+                    >
+                      Clear Holdings &amp; Set Budget for Round
+                    </button>
+                  </div>
                 </div>
 
                 {/* Teams Roster Table */}
