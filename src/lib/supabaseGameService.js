@@ -729,7 +729,12 @@ export async function manageCrisisDirect(passkey, action, params = {}) {
             });
           });
 
-          leaderboardCandidate.sort((a, b) => (b.netWorth || 0) - (a.netWorth || 0));
+          leaderboardCandidate.sort((a, b) => {
+            const bTax = Number(b.taxShieldedTotal || b.taxShielded || 0);
+            const aTax = Number(a.taxShieldedTotal || a.taxShielded || 0);
+            if (bTax !== aTax) return bTax - aTax;
+            return (b.netWorth || 0) - (a.netWorth || 0);
+          });
           state.teams = updatedTeams;
           state.leaderboard = leaderboardCandidate.map((item, rankIdx) => ({
             ...item,
